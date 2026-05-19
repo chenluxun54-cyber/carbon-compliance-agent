@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>双碳合规评级平台</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:        #16a34a;
+      --green-light:  #dcfce7;
+      --green-mid:    #86efac;
+      --green-dark:   #14532d;
+      --green-hover:  #15803d;
+      --bg:           #f9fafb;
+      --surface:      #ffffff;
+      --border:       #e5e7eb;
+      --text:         #111827;
+      --text-muted:   #6b7280;
+      --text-light:   #9ca3af;
+      --radius:       12px;
+      --shadow:       0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:    0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+      --font:         -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      --navbar-h:     60px;
+    }
+
+    html, body { height: 100%; font-family: var(--font); font-size: 14px; color: var(--text); background: var(--bg); overflow: hidden; }
+
+    /* ── Navbar ────────────────────────────────────────── */
+    #navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: var(--navbar-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px; gap: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 16px; font-weight: 700; color: var(--green-dark);
+      white-space: nowrap;
+    }
+
+    .nav-brand .leaf { font-size: 20px; }
+
+    .nav-divider { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+
+    .nav-controls {
+      display: flex; align-items: center; gap: 10px; flex: 1;
+    }
+
+    .nav-controls label { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+
+    select {
+      height: 36px; padding: 0 28px 0 10px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface); color: var(--text); font-size: 13px;
+      font-family: var(--font); cursor: pointer; outline: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      transition: border-color .15s;
+    }
+
+    select:focus { border-color: var(--green); }
+
+    #company-select { min-width: 220px; }
+    #year-select    { width: 100px; }
+
+    #query-btn {
+      height: 36px; padding: 0 20px;
+      background: var(--green); color: #fff;
+      border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+      font-family: var(--font); cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    #query-btn:hover  { background: var(--green-hover); }
+    #query-btn:active { transform: scale(.97); }
+
+    #company-info {
+      margin-left: auto; font-size: 12px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .info-tag {
+      background: var(--green-light); color: var(--green-dark);
+      padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500;
+    }
+
+    /* ── App layout ────────────────────────────────────── */
+    #app {
+      display: flex;
+      height: 100vh;
+      padding-top: var(--navbar-h);
+    }
+
+    /* ── Sidebar ───────────────────────────────────────── */
+    #sidebar {
+      width: 180px; flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 16px 10px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+
+    .tab-btn {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 10px 12px;
+      border: none; border-radius: 8px;
+      background: transparent; color: var(--text-muted);
+      font-size: 13.5px; font-family: var(--font); font-weight: 500;
+      cursor: pointer; text-align: left;
+      transition: background .15s, color .15s;
+    }
+    .tab-btn:hover  { background: var(--green-light); color: var(--green-dark); }
+    .tab-btn.active { background: var(--green-light); color: var(--green-dark); font-weight: 600; }
+    .tab-btn .icon  { font-size: 16px; }
+
+    #sidebar-footer {
+      margin-top: auto; padding: 10px 12px;
+      font-size: 11px; color: var(--text-light);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); flex-shrink: 0;
+    }
+
+    /* ── Main ──────────────────────────────────────────── */
+    #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+    .tab-content { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+    .tab-content.active { display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── Empty / Loading states ────────────────────────── */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      color: var(--text-muted); text-align: center; padding: 40px;
+    }
+    .empty-state .big-icon { font-size: 48px; opacity: .4; }
+    .empty-state h3 { font-size: 16px; font-weight: 600; color: var(--text); }
+    .empty-state p  { font-size: 13px; max-width: 300px; line-height: 1.6; }
+
+    .loading { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Cards ─────────────────────────────────────────── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      font-size: 13px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px;
+    }
+
+    /* ── Tab 1: 评分概览 ───────────────────────────────── */
+    #overview-top {
+      display: grid; grid-template-columns: 260px 1fr; gap: 20px;
+    }
+
+    .score-ring-card {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      padding: 24px;
+    }
+
+    .score-ring-wrap { position: relative; width: 180px; height: 180px; }
+
+    .score-ring-wrap svg { width: 100%; height: 100%; }
+
+    .score-ring-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+
+    .score-num { font-size: 42px; font-weight: 800; color: var(--text); line-height: 1; }
+    .score-denom { font-size: 14px; color: var(--text-muted); }
+
+    .rank-badge {
+      background: var(--green-light); color: var(--green-dark);
+      border-radius: 99px; padding: 6px 16px;
+      font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .rank-badge .rank-label { font-weight: 400; color: var(--green); }
+
+    .dim-bars-card { padding: 20px 24px; }
+
+    .dim-bar-row {
+      display: grid; grid-template-columns: 100px 1fr 60px;
+      align-items: center; gap: 12px; margin-bottom: 14px;
+    }
+    .dim-bar-row:last-child { margin-bottom: 0; }
+
+    .dim-bar-label { font-size: 12.5px; color: var(--text); font-weight: 500; }
+
+    .bar-track {
+      height: 8px; background: #f3f4f6; border-radius: 99px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 99px; background: var(--green);
+      transition: width .6s cubic-bezier(.4,0,.2,1);
+    }
+    .bar-fill.low    { background: #ef4444; }
+    .bar-fill.mid    { background: #f59e0b; }
+    .bar-fill.high   { background: var(--green); }
+
+    .dim-score-txt { font-size: 12px; color: var(--text-muted); text-align: right; }
+
+    /* ── Tab 2: 维度详情 ───────────────────────────────── */
+    .accordion-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+    }
+
+    .accordion-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px; cursor: pointer;
+      transition: background .15s;
+      user-select: none;
+    }
+    .accordion-header:hover { background: #f9fafb; }
+
+    .acc-dim-id {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--green-light); color: var(--green-dark);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+
+    .acc-dim-name { font-size: 14px; font-weight: 600; flex: 1; }
+
+    .acc-dim-score {
+      font-size: 13px; font-weight: 700; color: var(--green-dark);
+    }
+
+    .acc-dim-pct {
+      width: 80px; height: 6px; background: #f3f4f6;
+      border-radius: 99px; overflow: hidden; margin-left: 8px; flex-shrink: 0;
+    }
+
+    .acc-dim-pct-fill { height: 100%; background: var(--green); border-radius: 99px; }
+
+    .acc-chevron {
+      font-size: 11px; color: var(--text-muted); margin-left: 4px;
+      transition: transform .2s;
+    }
+
+    .accordion-item.open .acc-chevron { transform: rotate(180deg); }
+
+    .accordion-body { display: none; border-top: 1px solid var(--border); }
+    .accordion-item.open .accordion-body { display: block; }
+
+    .ind-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    .ind-table th {
+      background: #f9fafb; font-size: 11px; font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px;
+      padding: 8px 16px; text-align: left; border-bottom: 1px solid var(--border);
+    }
+
+    .ind-table td { padding: 10px 16px; border-bottom: 1px solid #f3f4f6; }
+    .ind-table tr:last-child td { border-bottom: none; }
+    .ind-table tr:hover td { background: #fafafa; }
+
+    .ind-score-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--green-light); color: var(--green-dark);
+      border-radius: 99px; padding: 2px 8px; font-weight: 600; font-size: 12px;
+    }
+
+    .ind-pct-bar { height: 4px; border-radius: 99px; background: #f3f4f6; min-width: 60px; }
+    .ind-pct-fill { height: 100%; border-radius: 99px; background: var(--green); }
+
+    .method-tag {
+      display: inline-block; padding: 2px 6px; border-radius: 4px;
+      font-size: 11px; font-weight: 500;
+    }
+    .method-tag.linear { background: #eff6ff; color: #1d4ed8; }
+    .method-tag.direct { background: #fef3c7; color: #92400e; }
+
+    /* ── Tab 3: 历史趋势 ───────────────────────────────── */
+    .chart-card { padding: 24px; }
+    .chart-wrap { position: relative; height: 320px; }
+
+    /* ── Tab 4: AI 对话 ────────────────────────────────── */
+    #tab-chat {
+      padding: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+    }
+
+    #chat-messages {
+      flex: 1; overflow-y: auto; padding: 24px 32px;
+      scroll-behavior: smooth; display: flex; flex-direction: column; gap: 16px;
+    }
+
+    #chat-messages::-webkit-scrollbar { width: 4px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .chat-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px;
+      color: var(--text-muted); text-align: center; padding: 40px;
+    }
+    .chat-empty .big-icon { font-size: 40px; opacity: .35; }
+    .chat-empty h3 { font-size: 15px; font-weight: 600; color: var(--text); }
+    .chat-empty p  { font-size: 13px; max-width: 280px; line-height: 1.6; }
+
+    .msg-row { display: flex; gap: 10px; max-width: 780px; width: 100%; }
+    .msg-row.user { align-self: flex-end; flex-direction: row-reverse; }
+
+    .msg-avatar {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; margin-top: 2px;
+    }
+    .msg-row.assistant .msg-avatar { background: var(--green-light); }
+
+    .msg-bubble {
+      padding: 11px 15px; border-radius: 16px;
+      font-size: 14px; line-height: 1.65; max-width: 72%;
+    }
+
+    .msg-row.user .msg-bubble {
+      background: var(--green); color: #fff;
+      border-radius: 16px 16px 4px 16px;
+    }
+
+    .msg-row.assistant .msg-bubble {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px 16px 16px 4px;
+      color: var(--text); box-shadow: var(--shadow);
+    }
+
+    /* Markdown inside assistant bubble */
+    .msg-bubble h1,.msg-bubble h2,.msg-bubble h3 { margin: 14px 0 6px; font-weight: 600; }
+    .msg-bubble h1:first-child,.msg-bubble h2:first-child,.msg-bubble h3:first-child { margin-top: 0; }
+    .msg-bubble p  { margin: 6px 0; }
+    .msg-bubble ul,.msg-bubble ol { padding-left: 20px; margin: 6px 0; }
+    .msg-bubble li { margin: 3px 0; }
+    .msg-bubble strong { font-weight: 600; }
+    .msg-bubble code {
+      background: #f3f4f6; border-radius: 4px; padding: 1px 5px;
+      font-size: 12px; font-family: monospace;
+    }
+    .msg-bubble pre { background: #f3f4f6; border-radius: 8px; padding: 10px; margin: 8px 0; overflow-x: auto; }
+    .msg-bubble pre code { background: none; padding: 0; }
+    .msg-bubble table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+    .msg-bubble th,.msg-bubble td { border: 1px solid var(--border); padding: 6px 10px; }
+    .msg-bubble th { background: #f9fafb; }
+
+    .status-msg {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text-muted); padding: 2px 0;
+      align-self: flex-start; max-width: 780px;
+    }
+    .status-msg .spinner { width: 14px; height: 14px; border-width: 1.5px; }
+
+    .cursor-blink {
+      display: inline-block; width: 2px; height: 1em;
+      background: var(--green); vertical-align: text-bottom;
+      margin-left: 1px; animation: blink .8s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+
+    #chat-input-area {
+      padding: 12px 32px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    #chat-input-wrap {
+      max-width: 780px; margin: 0 auto; position: relative;
+    }
+
+    #chat-input {
+      width: 100%; padding: 12px 48px 12px 16px;
+      border: 1px solid var(--border); border-radius: 12px;
+      font-size: 14px; font-family: var(--font); color: var(--text);
+      background: #f9fafb; resize: none; outline: none;
+      min-height: 48px; max-height: 160px; line-height: 1.5;
+      transition: border-color .15s, background .15s;
+    }
+    #chat-input:focus { border-color: var(--green); background: var(--surface); }
+    #chat-input::placeholder { color: var(--text-light); }
+
+    #chat-send-btn {
+      position: absolute; right: 8px; bottom: 8px;
+      width: 32px; height: 32px;
+      background: var(--green); border: none; border-radius: 8px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background .15s, opacity .15s;
+    }
+    #chat-send-btn:hover    { background: var(--green-hover); }
+    #chat-send-btn:disabled { opacity: .35; cursor: not-allowed; }
+    #chat-send-btn svg { width: 15px; height: 15px; fill: #fff; }
+
+    #chat-disclaimer {
+      max-width: 780px; margin: 6px auto 0;
+      font-size: 11px; color: var(--text-light); text-align: center;
+    }
+
+    /* ── Chip suggestions ──────────────────────────────── */
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+    .chip {
+      padding: 7px 14px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 99px;
+      font-size: 12.5px; color: var(--text-muted); cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .chip:hover { background: var(--green-light); color: var(--green-dark); border-color: var(--green-mid); }
+
+    /* ── Scrollbar ─────────────────────────────────────── */
+    .tab-content::-webkit-scrollbar { width: 4px; }
+    .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav id="navbar">
+  <div class="nav-brand">
+    <span class="leaf">🌿</span> 双碳合规评级平台
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-controls">
+    <label for="company-select">企业</label>
+    <select id="company-select"><option value="">加载中…</option></select>
+    <label for="year-select">年份</label>
+    <select id="year-select"></select>
+    <button id="query-btn" onclick="queryScore()">查询</button>
+  </div>
+  <div id="company-info"></div>
+</nav>
+
+<!-- App -->
+<div id="app">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">
+      <span class="icon">📊</span> 评分概览
+    </button>
+    <button class="tab-btn" data-tab="detail" onclick="switchTab('detail')">
+      <span class="icon">📋</span> 维度详情
+    </button>
+    <button class="tab-btn" data-tab="history" onclick="switchTab('history')">
+      <span class="icon">📈</span> 历史趋势
+    </button>
+    <button class="tab-btn" data-tab="chat" onclick="switchTab('chat')">
+      <span class="icon">💬</span> AI 对话
+    </button>
+    <div id="sidebar-footer">
+      <div class="status-dot"></div> claude-sonnet-4-6
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div id="main">
+
+    <!-- Tab: 评分概览 -->
+    <div id="tab-overview" class="tab-content active">
+      <div class="empty-state" id="overview-empty">
+        <div class="big-icon">📊</div>
+        <h3>选择企业并点击「查询」</h3>
+        <p>将显示该企业的碳排放综合评分、六大维度得分与行业分位排名。</p>
+      </div>
+    </div>
+
+    <!-- Tab: 维度详情 -->
+    <div id="tab-detail" class="tab-content">
+      <div class="empty-state" id="detail-empty">
+        <div class="big-icon">📋</div>
+        <h3>尚未加载数据</h3>
+        <p>请先在「评分概览」标签页中查询企业数据。</p>
+      </div>
+    </div>
+
+    <!-- Tab: 历史趋势 -->
+    <div id="tab-history" class="tab-content">
+      <div class="empty-state" id="history-empty">
+        <div class="big-icon">📈</div>
+        <h3>尚未加载数据</h3>
+        <p>请先在「评分概览」标签页中查询企业数据。</p>
+      </div>
+    </div>
+
+    <!-- Tab: AI 对话 -->
+    <div id="tab-chat" class="tab-content active" style="display:none">
+      <div id="chat-messages">
+        <div class="chat-empty" id="chat-empty">
+          <div class="big-icon">💬</div>
+          <h3>双碳顾问 AI</h3>
+          <p>查询企业评分后，我将自动了解企业背景，可直接向我提问。</p>
+          <div class="chip-row">
+            <div class="chip" onclick="sendChip('碳达峰和碳中和是什么意思？')">碳达峰碳中和基础</div>
+            <div class="chip" onclick="sendChip('企业如何参与碳交易市场？')">企业参与碳交易</div>
+            <div class="chip" onclick="sendChip('什么是 CBAM 碳边境调节机制？')">CBAM 解读</div>
+            <div class="chip" onclick="sendChip('如何制定企业碳中和路线图？')">碳中和路线图</div>
+          </div>
+        </div>
+      </div>
+      <div id="chat-input-area">
+        <div id="chat-input-wrap">
+          <textarea id="chat-input" placeholder="向双碳顾问提问…" rows="1"
+            oninput="autoResize(this)" onkeydown="handleChatKey(event)"></textarea>
+          <button id="chat-send-btn" onclick="sendChatMessage()" title="发送 (Enter)">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </div>
+        <div id="chat-disclaimer">AI 生成内容仅供参考，重要决策请结合专业意见</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Constants ───────────────────────────────────────────────────────
+const API = window.location.origin;
+const CIRCUMFERENCE = 2 * Math.PI * 75; // r=75
+
+const IND_NAMES = {
+  carbon_per_revenue:              "单位产值碳排放量",
+  energy_intensity:                "能源消耗强度",
+  carbon_per_employee:             "人均碳排放强度",
+  non_fossil_energy_ratio:         "非化石能源消费占比",
+  renewable_electricity_ratio:     "可再生能源/绿电占比",
+  energy_saving_equipment_ratio:   "节能装备应用占比",
+  yoy_carbon_reduction_rate:       "碳排放同比下降率",
+  yoy_carbon_intensity_improve:    "碳强度同比改善率",
+  green_investment_ratio:          "绿色改造投资占产值比",
+  avg_green_projects:              "年均绿色低碳改造项目数",
+  solid_waste_utilization_rate:    "固废综合利用率",
+  water_recycling_rate:            "工业用水重复利用率",
+  carbon_removal_rate:             "碳清除率",
+  energy_data_auto_collection:     "能碳平台数据自动采集率",
+  energy_platform_functions:       "能碳平台功能符合项数",
+  product_carbon_footprint_ratio:  "产品碳足迹核算类别占比",
+  supply_chain_measures_count:     "低碳供应链管理措施数",
+  certification_type:              "碳管理体系认证",
+  carbon_target_completeness:      "碳目标设定完整度",
+  disclosure_level:                "碳排放信息披露透明度",
+  supply_chain_disclosure:         "供应链碳披露参与度",
+  data_submission_lag_months:      "碳数据更新及时性",
+};
+
+// ── State ───────────────────────────────────────────────────────────
+let scoreData    = null;
+let historyData  = null;
+let companiesList = [];
+let histChart    = null;
+
+// Session + streaming
+let sessionId   = null;
+let isStreaming  = false;
+let curAssistEl = null;
+let curContent  = '';
+
+// ── Init ────────────────────────────────────────────────────────────
+async function init() {
+  await loadCompanies();
+  await initChatSession();
+}
+
+async function loadCompanies() {
+  const res  = await fetch(`${API}/companies`);
+  companiesList = await res.json();
+  companiesList.sort((a, b) => a.company_id.localeCompare(b.company_id));
+
+  const sel = document.getElementById('company-select');
+  sel.innerHTML = companiesList.map(c =>
+    `<option value="${c.company_id}">${c.company_id} · ${c.company_name}</option>`
+  ).join('');
+
+  updateYears();
+  sel.addEventListener('change', updateYears);
+}
+
+function updateYears() {
+  const cid  = document.getElementById('company-select').value;
+  const comp = companiesList.find(c => c.company_id === cid);
+  const sel  = document.getElementById('year-select');
+  if (!comp) return;
+  sel.innerHTML = comp.years.slice().reverse()
+    .map(y => `<option value="${y}">${y}</option>`).join('');
+}
+
+// ── Tab switching ────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(el => {
+    const isTarget = el.id === `tab-${name}`;
+    el.style.display = isTarget ? 'flex' : 'none';
+    el.classList.toggle('active', isTarget);
+  });
+  if (name === 'history' && scoreData && !historyData) loadHistory();
+}
+
+// ── Query score ──────────────────────────────────────────────────────
+async function queryScore() {
+  const cid  = document.getElementById('company-select').value;
+  const year = document.getElementById('year-select').value;
+  if (!cid || !year) return;
+
+  document.getElementById('query-btn').textContent = '加载中…';
+  document.getElementById('query-btn').disabled = true;
+
+  try {
+    const res  = await fetch(`${API}/score/${cid}/${year}`);
+    scoreData  = await res.json();
+    historyData = null;
+    if (histChart) { histChart.destroy(); histChart = null; }
+
+    renderOverview(scoreData);
+    renderDetail(scoreData);
+
+    // Update company info bar
+    const infoEl = document.getElementById('company-info');
+    infoEl.innerHTML = `
+      <span class="info-tag">${scoreData.industry}</span>
+      ${scoreData.company_name} &nbsp;·&nbsp; ${scoreData.report_year} 年
+      &nbsp;·&nbsp; 行业样本 ${scoreData.sample_size} 家
+    `;
+
+    // Inject context into chat
+    injectChatContext(scoreData);
+
+    switchTab('overview');
+  } catch (e) {
+    alert('查询失败：' + e.message);
+  } finally {
+    document.getElementById('query-btn').textContent = '查询';
+    document.getElementById('query-btn').disabled = false;
+  }
+}
+
+// ── Render overview ──────────────────────────────────────────────────
+function renderOverview(d) {
+  const pct       = d.total_score / 100;
+  const arc       = pct * CIRCUMFERENCE;
+  const rankPct   = d.dimensions.reduce((_, dim) => dim, null); // unused
+  // Calculate overall percentile from first dim's sample_size (all same)
+  const rankLabel = getRankLabel(pct);
+
+  const dimRows = d.dimensions.map(dim => {
+    const dimPct = dim.score / dim.max_score;
+    const cls    = dimPct < .4 ? 'low' : dimPct < .65 ? 'mid' : 'high';
+    return `
+      <div class="dim-bar-row">
+        <div class="dim-bar-label">${dim.name}</div>
+        <div class="bar-track">
+          <div class="bar-fill ${cls}" style="width:${(dimPct*100).toFixed(1)}%"></div>
+        </div>
+        <div class="dim-score-txt">${dim.score}/${dim.max_score}</div>
+      </div>`;
+  }).join('');
+
+  const scoreColor = pct < .4 ? '#ef4444' : pct < .65 ? '#f59e0b' : '#16a34a';
+
+  document.getElementById('tab-overview').innerHTML = `
+    <div id="overview-top">
+
+      <div class="card score-ring-card">
+        <div class="score-ring-wrap">
+          <svg viewBox="0 0 170 170">
+            <circle cx="85" cy="85" r="75" fill="none" stroke="#f3f4f6" stroke-width="14"/>
+            <circle cx="85" cy="85" r="75" fill="none"
+              stroke="${scoreColor}" stroke-width="14"
+              stroke-dasharray="${(arc*75/75).toFixed(2)} ${CIRCUMFERENCE.toFixed(2)}"
+              stroke-linecap="round"
+              transform="rotate(-90 85 85)"
+              style="transition: stroke-dasharray .7s cubic-bezier(.4,0,.2,1)"
+            />
+          </svg>
+          <div class="score-ring-center">
+            <div class="score-num" style="color:${scoreColor}">${d.total_score}</div>
+            <div class="score-denom">/ 100</div>
+          </div>
+        </div>
+        <div class="rank-badge">
+          <span>🏭</span>
+          <span class="rank-label">行业</span>
+          ${rankLabel}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);text-align:center">
+          ${d.company_name}<br>
+          <span style="color:var(--text-light)">${d.report_year} 年度 · ${d.industry}</span>
+        </div>
+      </div>
+
+      <div class="card dim-bars-card">
+        <div class="card-title">六大维度得分</div>
+        ${dimRows}
+      </div>
+    </div>
+  `;
+}
+
+function getRankLabel(pct) {
+  if (pct >= .80) return '前 20%';
+  if (pct >= .60) return '前 40%';
+  if (pct >= .40) return '前 60%';
+  if (pct >= .20) return '前 80%';
+  return '后 20%';
+}
+
+// ── Render detail ────────────────────────────────────────────────────
+function renderDetail(d) {
+  const accordions = d.dimensions.map(dim => {
+    const dimPct  = dim.score / dim.max_score;
+    const indRows = Object.entries(dim.indicators).map(([key, ind]) => {
+      const method  = ind.method === 'linear' ? '排名赋分' : '直接赋分';
+      const mClass  = ind.method === 'linear' ? 'linear' : 'direct';
+      const pctVal  = ind.percentile != null ? (ind.percentile * 100).toFixed(1) : '—';
+      const pctW    = ind.percentile != null ? (ind.percentile * 100).toFixed(1) : '0';
+      const missTxt = ind.missing ? ' <span style="color:#ef4444;font-size:11px">(缺失)</span>' : '';
+      return `
+        <tr>
+          <td>${IND_NAMES[key] || key}${missTxt}</td>
+          <td><span class="ind-score-pill">${ind.score} / ${ind.max_score}</span></td>
+          <td>
+            <div class="ind-pct-bar">
+              <div class="ind-pct-fill" style="width:${pctW}%"></div>
+            </div>
+          </td>
+          <td style="color:var(--text-muted)">${pctVal}%</td>
+          <td><span class="method-tag ${mClass}">${method}</span></td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="accordion-item">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="acc-dim-id">${dim.id}</div>
+          <div class="acc-dim-name">${dim.name}</div>
+          <div class="acc-dim-score">${dim.score} / ${dim.max_score}</div>
+          <div class="acc-dim-pct">
+            <div class="acc-dim-pct-fill" style="width:${(dimPct*100).toFixed(1)}%"></div>
+          </div>
+          <div class="acc-chevron">▼</div>
+        </div>
+        <div class="accordion-body">
+          <table class="ind-table">
+            <thead><tr>
+              <th>指标名称</th><th>得分</th><th>行业分位</th><th>百分位</th><th>赋分方式</th>
+            </tr></thead>
+            <tbody>${indRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('tab-detail').innerHTML = accordions;
+}
+
+function toggleAccordion(header) {
+  header.parentElement.classList.toggle('open');
+}
+
+// ── Load & render history ────────────────────────────────────────────
+async function loadHistory() {
+  const cid = document.getElementById('company-select').value;
+  if (!cid) return;
+
+  document.getElementById('tab-history').innerHTML =
+    `<div class="loading"><div class="spinner"></div> 加载历史数据…</div>`;
+
+  try {
+    const res   = await fetch(`${API}/history/${cid}`);
+    historyData = await res.json();
+    renderHistory(historyData);
+  } catch (e) {
+    document.getElementById('tab-history').innerHTML =
+      `<div class="empty-state"><div class="big-icon">⚠️</div><h3>加载失败</h3><p>${e.message}</p></div>`;
+  }
+}
+
+function renderHistory(data) {
+  document.getElementById('tab-history').innerHTML = `
+    <div class="card chart-card">
+      <div class="card-title">综合评分历史趋势</div>
+      <div class="chart-wrap"><canvas id="hist-canvas"></canvas></div>
+    </div>
+    <div class="card chart-card">
+      <div class="card-title">各维度得分趋势</div>
+      <div class="chart-wrap"><canvas id="hist-dim-canvas"></canvas></div>
+    </div>`;
+
+  const years  = data.map(d => d.report_year + ' 年');
+  const totals = data.map(d => d.total_score);
+
+  const ctx1 = document.getElementById('hist-canvas').getContext('2d');
+  new Chart(ctx1, {
+    type: 'line',
+    data: {
+      labels: years,
+      datasets: [{
+        label: '综合得分', data: totals,
+        borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.1)',
+        borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: '#16a34a',
+        fill: true, tension: .3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, grid: { color: '#f3f4f6' }, ticks: { font: { size: 12 } } },
+        x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+      }
+    }
+  });
+
+  const dimNames  = data[0].dimensions.map(d => d.name);
+  const dimColors = ['#16a34a','#0ea5e9','#f59e0b','#8b5cf6','#ec4899','#14b8a6'];
+
+  const dimDatasets = dimNames.map((name, i) => ({
+    label: name,
+    data: data.map(yr => yr.dimensions[i]?.score ?? 0),
+    borderColor: dimColors[i], backgroundColor: dimColors[i] + '20',
+    borderWidth: 2, pointRadius: 4, tension: .3,
+  }));
+
+  const ctx2 = document.getElementById('hist-dim-canvas').getContext('2d');
+  new Chart(ctx2, {
+    type: 'line',
+    data: { labels: years, datasets: dimDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } } },
+      scales: {
+        y: { min: 0, grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+      }
+    }
+  });
+}
+
+// ── Chat ─────────────────────────────────────────────────────────────
+async function initChatSession() {
+  const res = await fetch(`${API}/new_session`, { method: 'POST' });
+  const d   = await res.json();
+  sessionId = d.session_id;
+}
+
+function injectChatContext(d) {
+  // Silent context injection — sent to agent but not shown in UI
+  const msg = `[系统上下文] 当前查询企业：${d.company_name}（${d.company_id}），行业：${d.industry}，` +
+              `${d.report_year} 年度综合评分：${d.total_score}/100，行业样本：${d.sample_size}家。` +
+              `请在后续对话中基于此背景提供专业分析。`;
+  sendRaw(msg, false);
+}
+
+function sendChip(text) {
+  document.getElementById('chat-input').value = text;
+  sendChatMessage();
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text || isStreaming) return;
+  input.value = ''; input.style.height = 'auto';
+  await sendRaw(text, true);
+}
+
+async function sendRaw(text, showUser) {
+  if (isStreaming) return;
+  isStreaming = true;
+  document.getElementById('chat-send-btn').disabled = true;
+
+  if (showUser) {
+    removeEmpty('chat-empty');
+    appendUserMsg(text);
+  }
+
+  curContent  = '';
+  curAssistEl = showUser ? createAssistBubble() : null;
+
+  try {
+    const res = await fetch(`${API}/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, message: text }),
+    });
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        handleSSE(JSON.parse(line.slice(6)), showUser);
+      }
+    }
+  } catch (err) {
+    if (curAssistEl) curAssistEl.innerHTML = `<span style="color:#ef4444">⚠ 连接失败：${escHtml(String(err))}</span>`;
+  } finally {
+    isStreaming = false;
+    document.getElementById('chat-send-btn').disabled = false;
+  }
+}
+
+function handleSSE(payload, showUser) {
+  if (!showUser) return; // context injection: discard output silently
+  switch (payload.type) {
+    case 'token':
+      curContent += payload.content;
+      curAssistEl.innerHTML = marked.parse(curContent) + '<span class="cursor-blink"></span>';
+      chatScrollDown();
+      break;
+    case 'status':
+      showStatusMsg(payload.content);
+      break;
+    case 'done':
+      curAssistEl.innerHTML = marked.parse(curContent);
+      document.querySelectorAll('.status-msg').forEach(e => e.remove());
+      chatScrollDown();
+      break;
+  }
+}
+
+function appendUserMsg(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  row.innerHTML = `<div class="msg-bubble">${escHtml(text)}</div>`;
+  document.getElementById('chat-messages').appendChild(row);
+  chatScrollDown();
+}
+
+function createAssistBubble() {
+  const row = document.createElement('div');
+  row.className = 'msg-row assistant';
+  row.innerHTML = `<div class="msg-avatar">🌿</div><div class="msg-bubble"><span class="cursor-blink"></span></div>`;
+  document.getElementById('chat-messages').appendChild(row);
+  chatScrollDown();
+  return row.querySelector('.msg-bubble');
+}
+
+function showStatusMsg(text) {
+  document.querySelectorAll('.status-msg').forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'status-msg';
+  el.innerHTML = `<div class="spinner"></div><span>${escHtml(text)}</span>`;
+  document.getElementById('chat-messages').appendChild(el);
+  chatScrollDown();
+}
+
+function chatScrollDown() {
+  const el = document.getElementById('chat-messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+function removeEmpty(id) { document.getElementById(id)?.remove(); }
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+marked.setOptions({ breaks: true, gfm: true });
+
+// ── Boot ─────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
