@@ -23,10 +23,7 @@ from data_loader import DataLoader
 from scorer import CarbonScorer
 
 # ── API Key：优先读环境变量，本地开发回退到 skill_entry.py 的值 ──
-ANTHROPIC_API_KEY = os.environ.get(
-    "ANTHROPIC_API_KEY",
-    "cr_5c871c335489e0bd9f0a5ae2a4f250b4bdf4e28e166b33d8d9747068e9ddc166"
-)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -89,78 +86,73 @@ def execute_carbon_score(company_id: str, report_year: int) -> str:
 
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
 async def agent_stream(session_id: str, user_message: str):
+    if not ANTHROPIC_API_KEY:
+        yield f"data: {json.dumps({'type': 'error', 'content': '未设置 ANTHROPIC_API_KEY 环境变量。请在终端运行：export ANTHROPIC_API_KEY=sk-ant-...'})}\n\n"
+        return
+
     if session_id not in sessions:
         sessions[session_id] = []
 
     messages = sessions[session_id]
     messages.append({"role": "user", "content": user_message})
 
-    full_response_text = ""
+    try:
+        while True:
+            response = await client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                tools=TOOLS,
+                messages=messages,
+            )
 
-    while True:
-        response = await client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
-            messages=messages,
-        )
+            if response.stop_reason == "tool_use":
+                messages.append({"role": "assistant", "content": response.content})
+                tool_results = []
+                for block in response.content:
+                    if block.type == "text" and block.text.strip():
+                        yield f"data: {json.dumps({'type': 'token', 'content': block.text})}\n\n"
 
-        if response.stop_reason == "tool_use":
-            # 把当前助手消息加入历史
-            messages.append({"role": "assistant", "content": response.content})
+                    elif block.type == "tool_use":
+                        cid = block.input.get("company_id", "")
+                        yr  = block.input.get("report_year", "")
+                        yield f"data: {json.dumps({'type': 'status', 'content': f'🔍 正在查询 {cid}（{yr} 年）碳评分数据...'})}\n\n"
+                        loop = asyncio.get_event_loop()
+                        try:
+                            result_str = await loop.run_in_executor(
+                                None,
+                                lambda: execute_carbon_score(block.input["company_id"], block.input["report_year"])
+                            )
+                            yield f"data: {json.dumps({'type': 'status', 'content': '✅ 数据获取完成，正在生成分析...'})}\n\n"
+                        except Exception as tool_err:
+                            result_str = f"错误：{str(tool_err)}"
+                            yield f"data: {json.dumps({'type': 'status', 'content': f'❌ 查询失败：{str(tool_err)}'})}\n\n"
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": result_str,
+                        })
+                messages.append({"role": "user", "content": tool_results})
 
-            tool_results = []
-            for block in response.content:
-                if block.type == "text" and block.text.strip():
-                    # 助手在调用工具前说的话，直接流出
-                    yield f"data: {json.dumps({'type': 'token', 'content': block.text})}\n\n"
-                    full_response_text += block.text
+            else:
+                text = ""
+                for block in response.content:
+                    if block.type == "text":
+                        text += block.text
+                messages.append({"role": "assistant", "content": text})
+                words = text.split(" ")
+                for i, word in enumerate(words):
+                    chunk = word + (" " if i < len(words) - 1 else "")
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+                    await asyncio.sleep(0.018)
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                break
 
-                elif block.type == "tool_use":
-                    cid = block.input.get("company_id", "")
-                    yr  = block.input.get("report_year", "")
-                    yield f"data: {json.dumps({'type': 'status', 'content': f'🔍 正在查询 {cid}（{yr} 年）碳评分数据...'})}\n\n"
-
-                    # 执行工具（同步，用 asyncio 跑到线程池避免阻塞）
-                    loop = asyncio.get_event_loop()
-                    try:
-                        result_str = await loop.run_in_executor(
-                            None,
-                            lambda: execute_carbon_score(block.input["company_id"], block.input["report_year"])
-                        )
-                        yield f"data: {json.dumps({'type': 'status', 'content': '✅ 数据获取完成，正在生成分析...'})}\n\n"
-                    except Exception as e:
-                        result_str = f"错误：{str(e)}"
-                        yield f"data: {json.dumps({'type': 'status', 'content': f'❌ 查询失败：{str(e)}'})}\n\n"
-
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result_str,
-                    })
-
-            messages.append({"role": "user", "content": tool_results})
-
-        else:
-            # stop_reason == "end_turn"：流式输出最终文本
-            text = ""
-            for block in response.content:
-                if block.type == "text":
-                    text += block.text
-
-            messages.append({"role": "assistant", "content": text})
-            full_response_text += text
-
-            # 按词流式输出，模拟打字效果
-            words = text.split(" ")
-            for i, word in enumerate(words):
-                chunk = word + (" " if i < len(words) - 1 else "")
-                yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-                await asyncio.sleep(0.018)
-
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            break
+    except Exception as e:
+        err_msg = str(e)
+        if "authentication" in err_msg.lower() or "401" in err_msg:
+            err_msg = "API Key 无效。请在终端运行：export ANTHROPIC_API_KEY=sk-ant-... 然后重启服务。"
+        yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────────

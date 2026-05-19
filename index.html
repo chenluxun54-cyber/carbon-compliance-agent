@@ -949,6 +949,11 @@ function handleSSE(payload, showUser) {
     case 'status':
       showStatusMsg(payload.content);
       break;
+    case 'error':
+      document.querySelectorAll('.status-msg').forEach(e => e.remove());
+      if (curAssistEl) curAssistEl.innerHTML = `<span style="color:#dc2626">⚠ ${escHtml(payload.content)}</span>`;
+      chatScrollDown();
+      break;
     case 'done':
       curAssistEl.innerHTML = marked.parse(curContent);
       document.querySelectorAll('.status-msg').forEach(e => e.remove());
