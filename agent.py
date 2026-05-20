@@ -1,6 +1,9 @@
 """
 双碳 Agent — FastAPI 后端
 启动：cd carbon_skill && uvicorn agent:app --reload --port 8000
+
+MODEL_PROVIDER=anthropic  → Claude (默认)
+MODEL_PROVIDER=minimax    → MiniMax（abab6.5s-chat 等）
 """
 
 import json
@@ -22,10 +25,27 @@ sys.path.insert(0, str(Path(__file__).parent))
 from data_loader import DataLoader
 from scorer import CarbonScorer
 
-# ── API Key：优先读环境变量，本地开发回退到 skill_entry.py 的值 ──
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# ── Provider 配置 ─────────────────────────────────────────────────
+MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
 
-client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+MINIMAX_API_KEY   = os.environ.get("MINIMAX_API_KEY", "")
+MINIMAX_MODEL     = os.environ.get("MINIMAX_MODEL", "abab6.5s-chat")
+
+anthropic_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+
+# MiniMax uses OpenAI-compatible API — import lazily so openai isn't required when using Anthropic
+_openai_client = None
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        from openai import AsyncOpenAI
+        _openai_client = AsyncOpenAI(
+            api_key=MINIMAX_API_KEY,
+            base_url="https://api.minimax.chat/v1",
+        )
+    return _openai_client
 
 # ── 预初始化数据组件 ──────────────────────────────────────────────
 _loader = DataLoader()
@@ -51,8 +71,8 @@ SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询�
 - 使用 Markdown 格式，适当使用标题、列表让回答结构清晰
 """
 
-# ── Tool 定义 ─────────────────────────────────────────────────────
-TOOLS = [
+# ── Tool 定义（Anthropic 格式）────────────────────────────────────
+TOOLS_ANTHROPIC = [
     {
         "name": "carbon_score",
         "description": "查询企业的碳表现评分数据。返回碳排放强度、能源结构、减碳表现等6个维度的得分及行业排名百分位。",
@@ -73,21 +93,45 @@ TOOLS = [
     }
 ]
 
+# ── Tool 定义（OpenAI/MiniMax 格式）──────────────────────────────
+TOOLS_OPENAI = [
+    {
+        "type": "function",
+        "function": {
+            "name": "carbon_score",
+            "description": "查询企业的碳表现评分数据。返回碳排放强度、能源结构、减碳表现等6个维度的得分及行业排名百分位。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "company_id": {
+                        "type": "string",
+                        "description": "企业ID，格式为 COMP_XXX，例如 COMP_001"
+                    },
+                    "report_year": {
+                        "type": "integer",
+                        "description": "报告年度，例如 2024"
+                    }
+                },
+                "required": ["company_id", "report_year"]
+            }
+        }
+    }
+]
+
 # ── 会话存储（内存）─────────────────────────────────────────────
 sessions: dict[str, list] = {}
 
 
 def execute_carbon_score(company_id: str, report_year: int) -> str:
-    """直接调用 DataLoader + CarbonScorer，不触发 Claude 子调用"""
     data = _loader.fetch(company_id, report_year)
     result = _scorer.score(data)
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-# ── Agent 主循环（SSE 流式生成器）───────────────────────────────
-async def agent_stream(session_id: str, user_message: str):
+# ── Anthropic Agent 流 ────────────────────────────────────────────
+async def agent_stream_anthropic(session_id: str, user_message: str):
     if not ANTHROPIC_API_KEY:
-        yield f"data: {json.dumps({'type': 'error', 'content': '未设置 ANTHROPIC_API_KEY 环境变量。请在终端运行：export ANTHROPIC_API_KEY=sk-ant-...'})}\n\n"
+        yield f"data: {json.dumps({'type': 'error', 'content': '未设置 ANTHROPIC_API_KEY 环境变量。请运行：export ANTHROPIC_API_KEY=sk-ant-...'})}\n\n"
         return
 
     if session_id not in sessions:
@@ -98,11 +142,11 @@ async def agent_stream(session_id: str, user_message: str):
 
     try:
         while True:
-            response = await client.messages.create(
+            response = await anthropic_client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=4096,
                 system=SYSTEM_PROMPT,
-                tools=TOOLS,
+                tools=TOOLS_ANTHROPIC,
                 messages=messages,
             )
 
@@ -112,7 +156,6 @@ async def agent_stream(session_id: str, user_message: str):
                 for block in response.content:
                     if block.type == "text" and block.text.strip():
                         yield f"data: {json.dumps({'type': 'token', 'content': block.text})}\n\n"
-
                     elif block.type == "tool_use":
                         cid = block.input.get("company_id", "")
                         yr  = block.input.get("report_year", "")
@@ -151,8 +194,89 @@ async def agent_stream(session_id: str, user_message: str):
     except Exception as e:
         err_msg = str(e)
         if "authentication" in err_msg.lower() or "401" in err_msg:
-            err_msg = "API Key 无效。请在终端运行：export ANTHROPIC_API_KEY=sk-ant-... 然后重启服务。"
+            err_msg = "API Key 无效。请运行：export ANTHROPIC_API_KEY=sk-ant-... 然后重启服务。"
         yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
+
+
+# ── MiniMax Agent 流 ──────────────────────────────────────────────
+async def agent_stream_minimax(session_id: str, user_message: str):
+    if not MINIMAX_API_KEY:
+        yield f"data: {json.dumps({'type': 'error', 'content': '未设置 MINIMAX_API_KEY 环境变量。请运行：export MINIMAX_API_KEY=your-key'})}\n\n"
+        return
+
+    if session_id not in sessions:
+        sessions[session_id] = []
+
+    messages = sessions[session_id]
+    # MiniMax uses system message in the messages list
+    if not messages:
+        messages.append({"role": "system", "content": SYSTEM_PROMPT})
+    messages.append({"role": "user", "content": user_message})
+
+    client = get_openai_client()
+
+    try:
+        while True:
+            response = await client.chat.completions.create(
+                model=MINIMAX_MODEL,
+                max_tokens=4096,
+                tools=TOOLS_OPENAI,
+                tool_choice="auto",
+                messages=messages,
+            )
+
+            choice = response.choices[0]
+            msg = choice.message
+
+            if choice.finish_reason == "tool_calls" and msg.tool_calls:
+                messages.append(msg)
+                for tool_call in msg.tool_calls:
+                    fn_args = json.loads(tool_call.function.arguments)
+                    cid = fn_args.get("company_id", "")
+                    yr  = fn_args.get("report_year", "")
+                    yield f"data: {json.dumps({'type': 'status', 'content': f'🔍 正在查询 {cid}（{yr} 年）碳评分数据...'})}\n\n"
+                    loop = asyncio.get_event_loop()
+                    try:
+                        result_str = await loop.run_in_executor(
+                            None,
+                            lambda: execute_carbon_score(fn_args["company_id"], fn_args["report_year"])
+                        )
+                        yield f"data: {json.dumps({'type': 'status', 'content': '✅ 数据获取完成，正在生成分析...'})}\n\n"
+                    except Exception as tool_err:
+                        result_str = f"错误：{str(tool_err)}"
+                        yield f"data: {json.dumps({'type': 'status', 'content': f'❌ 查询失败：{str(tool_err)}'})}\n\n"
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": result_str,
+                    })
+
+            else:
+                text = msg.content or ""
+                messages.append({"role": "assistant", "content": text})
+                words = text.split(" ")
+                for i, word in enumerate(words):
+                    chunk = word + (" " if i < len(words) - 1 else "")
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+                    await asyncio.sleep(0.018)
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                break
+
+    except Exception as e:
+        err_msg = str(e)
+        if "401" in err_msg or "authentication" in err_msg.lower():
+            err_msg = "MiniMax API Key 无效。请运行：export MINIMAX_API_KEY=your-key 然后重启服务。"
+        yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
+
+
+# ── 统一入口：根据 MODEL_PROVIDER 分发 ───────────────────────────
+async def agent_stream(session_id: str, user_message: str):
+    if MODEL_PROVIDER == "minimax":
+        async for chunk in agent_stream_minimax(session_id, user_message):
+            yield chunk
+    else:
+        async for chunk in agent_stream_anthropic(session_id, user_message):
+            yield chunk
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────────
@@ -193,9 +317,17 @@ async def new_session():
     return {"session_id": sid}
 
 
+@app.get("/provider")
+async def get_provider():
+    """返回当前使用的模型 Provider"""
+    return {
+        "provider": MODEL_PROVIDER,
+        "model": MINIMAX_MODEL if MODEL_PROVIDER == "minimax" else "claude-sonnet-4-6",
+    }
+
+
 @app.get("/companies")
 async def get_companies():
-    """返回数据库中所有企业列表（供前端下拉框使用）"""
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _loader._load_excel)
     df = _loader._company_df
@@ -217,7 +349,6 @@ async def get_companies():
 
 @app.get("/score/{company_id}/{year}")
 async def get_score(company_id: str, year: int):
-    """直接返回某企业某年度的完整评分 JSON"""
     loop = asyncio.get_event_loop()
     data   = await loop.run_in_executor(None, lambda: _loader.fetch(company_id, year))
     result = await loop.run_in_executor(None, lambda: _scorer.score(data))
@@ -226,7 +357,6 @@ async def get_score(company_id: str, year: int):
 
 @app.get("/history/{company_id}")
 async def get_history(company_id: str):
-    """返回该企业最近3年的总分和维度得分（用于趋势图）"""
     loop    = asyncio.get_event_loop()
     history = await loop.run_in_executor(None, lambda: _loader.fetch_history(company_id))
     out = []
