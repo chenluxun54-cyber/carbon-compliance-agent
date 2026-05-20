@@ -36,7 +36,7 @@ PROVIDERS = {
     },
     "minimax": {
         "api_key": os.environ.get("MINIMAX_API_KEY", ""),
-        "base_url": "https://api.minimax.chat/v1/anthropic",
+        "base_url": "https://api.minimaxi.com/anthropic",
         "model": os.environ.get("MINIMAX_MODEL", "MiniMax-Text-01"),
     },
 }
