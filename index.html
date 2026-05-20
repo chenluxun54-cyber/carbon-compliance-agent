@@ -304,10 +304,9 @@
 
     /* ── Tab 4: AI 对话 ────────────────────────────────── */
     #tab-chat {
-      padding: 0 !important;
-      display: flex !important;
-      flex-direction: column !important;
-      overflow: hidden !important;
+      padding: 0;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     #chat-messages {
@@ -437,53 +436,73 @@
     .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
     /* ── Tab 5: 政策库 ──────────────────────────────────── */
-    #tab-policy { padding: 0 !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+    #tab-policy { padding: 0; flex-direction: row; overflow: hidden; }
 
-    .policy-toolbar { display: flex; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; align-items: center; }
-    .policy-search { flex: 1; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); outline: none; background: #f9fafb; color: var(--text); }
+    /* Left panel */
+    .policy-left { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
+    .policy-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 12px 10px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+    .policy-search { width: 100%; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); outline: none; background: #f9fafb; color: var(--text); }
     .policy-search:focus { border-color: var(--green); background: var(--surface); }
-
-    .policy-body { display: flex; flex: 1; overflow: hidden; }
-    .policy-list { width: 300px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .policy-toolbar select { flex: 1; height: 32px; font-size: 12px; }
+    .policy-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
     .policy-list::-webkit-scrollbar { width: 4px; }
     .policy-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    .policy-detail-panel { flex: 1; overflow-y: auto; padding: 28px 32px; }
-    .policy-detail-panel::-webkit-scrollbar { width: 4px; }
-    .policy-detail-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-    .policy-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
-    .policy-card:hover { border-color: var(--green-mid); box-shadow: var(--shadow-md); }
-    .policy-card.selected { border-color: var(--green); background: var(--green-light); }
-    .policy-card-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; line-height: 1.4; }
+    /* Policy cards */
+    .policy-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color .15s, box-shadow .15s; }
+    .policy-card:hover { border-color: var(--green-mid); }
+    .policy-card.expanded { border-color: var(--green); box-shadow: var(--shadow-md); }
+    .policy-card-top { padding: 12px 14px; cursor: pointer; }
+    .policy-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .policy-card-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; flex: 1; }
+    .policy-card-chevron { font-size: 10px; color: var(--text-muted); flex-shrink: 0; margin-top: 3px; transition: transform .2s; }
+    .policy-card.expanded .policy-card-chevron { transform: rotate(180deg); }
     .policy-card-meta { display: flex; gap: 5px; margin-bottom: 7px; flex-wrap: wrap; }
-    .policy-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; }
+    .policy-badge { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 99px; }
     .badge-global   { background: #e0f2fe; color: #0369a1; }
     .badge-eu       { background: #ede9fe; color: #5b21b6; }
     .badge-cn       { background: #fef3c7; color: #92400e; }
     .badge-category { background: #f3f4f6; color: var(--text-muted); }
-    .policy-card-summary { font-size: 12px; color: var(--text-muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .policy-card-summary { font-size: 12px; color: var(--text-muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }
+    .policy-source-link { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--green); text-decoration: none; font-weight: 500; }
+    .policy-source-link:hover { text-decoration: underline; }
 
-    .policy-detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--text-muted); text-align: center; }
+    /* Expanded body */
+    .policy-card-body { border-top: 1px solid var(--border); padding: 12px 14px; background: #fafafa; display: none; }
+    .policy-card.expanded .policy-card-body { display: block; }
+    .pc-section { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin: 10px 0 6px; }
+    .pc-section:first-child { margin-top: 0; }
+    .pc-req { display: flex; gap: 8px; font-size: 12px; color: var(--text); line-height: 1.55; margin-bottom: 5px; }
+    .pc-req-num { width: 18px; height: 18px; border-radius: 50%; background: var(--green-light); color: var(--green-dark); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .pc-example { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 7px; }
+    .pc-example-header { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
+    .pc-company { font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .pc-company-meta { font-size: 11px; color: var(--text-muted); }
+    .pc-example-link { font-size: 11px; color: var(--green); text-decoration: none; white-space: nowrap; }
+    .pc-example-link:hover { text-decoration: underline; }
+    .pc-action { font-size: 12px; color: var(--text); line-height: 1.55; margin-bottom: 5px; }
+    .pc-result { font-size: 11.5px; color: var(--green-dark); background: var(--green-light); border-radius: 5px; padding: 5px 9px; line-height: 1.5; }
+    .pc-ask-btn { width: 100%; margin-top: 10px; padding: 9px; background: var(--green); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s; }
+    .pc-ask-btn:hover { background: var(--green-hover); }
 
-    .pd-header { margin-bottom: 20px; }
-    .pd-name  { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 10px; line-height: 1.3; }
-    .pd-meta  { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .pd-date  { font-size: 12px; color: var(--text-muted); }
-    .pd-summary { font-size: 14px; line-height: 1.75; color: var(--text); margin-bottom: 24px; padding: 16px 18px; background: #f9fafb; border-radius: 10px; border-left: 3px solid var(--green); }
-    .pd-section-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 12px; }
-    .pd-requirements { margin-bottom: 28px; }
-    .pd-req-item { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid #f3f4f6; font-size: 13.5px; line-height: 1.65; }
-    .pd-req-item:last-child { border-bottom: none; }
-    .pd-req-num { width: 22px; height: 22px; border-radius: 50%; background: var(--green-light); color: var(--green-dark); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
-    .pd-examples { margin-bottom: 28px; display: flex; flex-direction: column; gap: 12px; }
-    .pd-example-card { background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-    .pd-example-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-    .pd-company-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
-    .pd-company-meta { font-size: 11px; color: var(--text-muted); }
-    .pd-example-action { font-size: 13px; color: var(--text); line-height: 1.65; margin-bottom: 8px; }
-    .pd-example-result { font-size: 12.5px; color: var(--green-dark); background: var(--green-light); border-radius: 6px; padding: 7px 12px; line-height: 1.5; }
-    .pd-ask-btn { width: 100%; padding: 13px; background: var(--green); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s; margin-top: 4px; }
-    .pd-ask-btn:hover { background: var(--green-hover); }
+    /* Right panel — policy chat */
+    .policy-chat-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .policy-chat-header { padding: 13px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+    .policy-chat-header-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .policy-chat-header-sub { font-size: 12px; color: var(--text-muted); }
+    #policy-chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+    #policy-chat-messages::-webkit-scrollbar { width: 4px; }
+    #policy-chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .policy-chat-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--text-muted); text-align: center; padding: 32px; }
+    .policy-chat-empty .big-icon { font-size: 36px; opacity: .3; }
+    #policy-chat-input-area { padding: 10px 20px 14px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+    #policy-chat-input-wrap { position: relative; }
+    #policy-chat-input { width: 100%; padding: 11px 44px 11px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 13.5px; font-family: var(--font); color: var(--text); background: #f9fafb; resize: none; outline: none; min-height: 44px; max-height: 120px; line-height: 1.5; transition: border-color .15s, background .15s; }
+    #policy-chat-input:focus { border-color: var(--green); background: var(--surface); }
+    #policy-chat-send-btn { position: absolute; right: 7px; bottom: 7px; width: 30px; height: 30px; background: var(--green); border: none; border-radius: 7px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s, opacity .15s; }
+    #policy-chat-send-btn:hover { background: var(--green-hover); }
+    #policy-chat-send-btn:disabled { opacity: .35; cursor: not-allowed; }
+    #policy-chat-send-btn svg { width: 14px; height: 14px; fill: #fff; }
   </style>
 </head>
 <body>
@@ -588,39 +607,56 @@
 
     <!-- Tab: 政策库 -->
     <div id="tab-policy" class="tab-content">
-      <div class="policy-toolbar">
-        <input class="policy-search" id="policy-search" type="text"
-          placeholder="🔍 搜索政策名称、关键词…" oninput="filterPolicies()">
-        <select id="policy-jurisdiction" onchange="filterPolicies()">
-          <option value="">全部地区</option>
-          <option value="全球">🌍 全球</option>
-          <option value="欧盟">🇪🇺 欧盟</option>
-          <option value="中国">🇨🇳 中国</option>
-        </select>
-        <select id="policy-industry" onchange="filterPolicies()">
-          <option value="">全部行业</option>
-          <option value="电力">电力</option>
-          <option value="钢铁">钢铁</option>
-          <option value="化工">化工</option>
-          <option value="水泥">水泥</option>
-          <option value="制造业">制造业</option>
-          <option value="金融">金融</option>
-          <option value="科技">科技</option>
-          <option value="航空">航空</option>
-          <option value="铝">铝</option>
-        </select>
-      </div>
-      <div class="policy-body">
+      <div class="policy-left">
+        <div class="policy-toolbar">
+          <input class="policy-search" id="policy-search" type="text"
+            placeholder="🔍 搜索政策名称、关键词…" oninput="filterPolicies()">
+          <select id="policy-jurisdiction" onchange="filterPolicies()">
+            <option value="">全部地区</option>
+            <option value="全球">🌍 全球</option>
+            <option value="欧盟">🇪🇺 欧盟</option>
+            <option value="中国">🇨🇳 中国</option>
+          </select>
+          <select id="policy-industry" onchange="filterPolicies()">
+            <option value="">全部行业</option>
+            <option value="电力">电力</option>
+            <option value="钢铁">钢铁</option>
+            <option value="化工">化工</option>
+            <option value="水泥">水泥</option>
+            <option value="制造业">制造业</option>
+            <option value="金融">金融</option>
+            <option value="科技">科技</option>
+            <option value="航空">航空</option>
+            <option value="铝">铝</option>
+          </select>
+        </div>
         <div class="policy-list" id="policy-list">
           <div class="loading"><div class="spinner"></div> 加载政策库…</div>
         </div>
-        <div class="policy-detail-panel" id="policy-detail-panel">
-          <div class="policy-detail-empty">
-            <div style="font-size:48px;opacity:.3">📜</div>
-            <h3 style="font-size:16px;font-weight:600;color:var(--text)">选择左侧政策查看详情</h3>
-            <p style="font-size:13px;max-width:260px;line-height:1.6;margin-top:4px">
-              点击政策卡片查看完整合规要求和真实企业案例，或向 AI 顾问提问
+      </div>
+      <div class="policy-chat-panel">
+        <div class="policy-chat-header">
+          <span style="font-size:18px">📜</span>
+          <div>
+            <div class="policy-chat-header-title">政策顾问 AI</div>
+            <div class="policy-chat-header-sub">展开左侧政策卡片，点击「向 AI 提问」即可深入了解</div>
+          </div>
+        </div>
+        <div id="policy-chat-messages">
+          <div class="policy-chat-empty" id="policy-chat-empty">
+            <div class="big-icon">📜</div>
+            <p style="font-size:13px;max-width:260px;line-height:1.6">
+              选择左侧政策后点击「向 AI 顾问提问」，或直接在下方输入问题
             </p>
+          </div>
+        </div>
+        <div id="policy-chat-input-area">
+          <div id="policy-chat-input-wrap">
+            <textarea id="policy-chat-input" placeholder="输入政策相关问题…" rows="1"
+              oninput="autoResize(this)" onkeydown="handlePolicyChatKey(event)"></textarea>
+            <button id="policy-chat-send-btn" onclick="sendPolicyMessage()" title="发送 (Enter)">
+              <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -674,7 +710,7 @@ let curContent  = '';
 // ── Init ────────────────────────────────────────────────────────────
 async function init() {
   await loadCompanies();
-  await initChatSession();
+  await Promise.all([initChatSession(), initPolicyChatSession()]);
   loadPolicies(); // non-blocking, loads in background
 }
 
@@ -1095,10 +1131,19 @@ function escHtml(s) {
 marked.setOptions({ breaks: true, gfm: true });
 
 // ── Policy Library ───────────────────────────────────────────────────
-let allPolicies      = [];
-let selectedPolicyId = null;
+let allPolicies     = [];
+let policySessionId = null;
+let pIsStreaming    = false;
+let pCurAssistEl    = null;
+let pCurContent     = '';
 
 const BADGE_CLASS = { '全球': 'badge-global', '欧盟': 'badge-eu', '中国': 'badge-cn' };
+
+async function initPolicyChatSession() {
+  const res = await fetch(`${API}/new_session`, { method: 'POST' });
+  const d   = await res.json();
+  policySessionId = d.session_id;
+}
 
 async function loadPolicies() {
   try {
@@ -1129,77 +1174,194 @@ function renderPolicyList(policies) {
       `<div class="empty-state" style="padding:32px 16px"><p>无匹配政策</p></div>`;
     return;
   }
-  document.getElementById('policy-list').innerHTML = policies.map(p => `
-    <div class="policy-card ${p.id === selectedPolicyId ? 'selected' : ''}"
-         onclick="showPolicyDetail('${p.id}')">
-      <div class="policy-card-name">${escHtml(p.name)}</div>
-      <div class="policy-card-meta">
-        <span class="policy-badge ${BADGE_CLASS[p.jurisdiction] || 'badge-category'}">${escHtml(p.jurisdiction)}</span>
-        <span class="policy-badge badge-category">${escHtml(p.category)}</span>
-      </div>
-      <div class="policy-card-summary">${escHtml(p.summary)}</div>
-    </div>`).join('');
+  document.getElementById('policy-list').innerHTML = policies.map(p => {
+    const bc = BADGE_CLASS[p.jurisdiction] || 'badge-category';
+    return `
+      <div class="policy-card" id="pc-${p.id}">
+        <div class="policy-card-top" onclick="togglePolicyCard('${p.id}')">
+          <div class="policy-card-header">
+            <div class="policy-card-name">${escHtml(p.name)}</div>
+            <div class="policy-card-chevron">▼</div>
+          </div>
+          <div class="policy-card-meta">
+            <span class="policy-badge ${bc}">${escHtml(p.jurisdiction)}</span>
+            <span class="policy-badge badge-category">${escHtml(p.category)}</span>
+          </div>
+          <div class="policy-card-summary">${escHtml(p.summary)}</div>
+          ${p.source_url ? `<a class="policy-source-link" href="${escHtml(p.source_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 原文链接</a>` : ''}
+        </div>
+        <div class="policy-card-body" id="pcb-${p.id}">
+          <div class="loading"><div class="spinner"></div> 加载详情…</div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
-async function showPolicyDetail(policyId) {
-  selectedPolicyId = policyId;
-  filterPolicies(); // re-render list to show selected state
-  const panel = document.getElementById('policy-detail-panel');
-  panel.innerHTML = `<div class="loading" style="padding:40px"><div class="spinner"></div> 加载详情…</div>`;
-  try {
-    const res = await fetch(`${API}/policies/${policyId}`);
-    const p   = await res.json();
-    if (p.error) throw new Error(p.error);
+async function togglePolicyCard(policyId) {
+  const card = document.getElementById(`pc-${policyId}`);
+  const body = document.getElementById(`pcb-${policyId}`);
+  if (!card || !body) return;
 
-    const reqs = p.key_requirements.map((r, i) => `
-      <div class="pd-req-item">
-        <div class="pd-req-num">${i + 1}</div>
-        <div>${escHtml(r)}</div>
-      </div>`).join('');
+  const isExpanding = !card.classList.contains('expanded');
+  card.classList.toggle('expanded', isExpanding);
 
-    const examples = p.compliance_examples.map(ex => `
-      <div class="pd-example-card">
-        <div class="pd-example-header">
-          <div class="pd-company-name">${escHtml(ex.company)}</div>
-          <div class="pd-company-meta">${escHtml(ex.country)} · ${escHtml(ex.industry)}</div>
-        </div>
-        <div class="pd-example-action">${escHtml(ex.action)}</div>
-        <div class="pd-example-result">✅ ${escHtml(ex.result)}</div>
-      </div>`).join('');
-
-    const safeNameAttr = p.name.replace(/'/g, "\\'");
-    panel.innerHTML = `
-      <div class="pd-header">
-        <div class="pd-name">${escHtml(p.name)}</div>
-        <div class="pd-meta">
-          <span class="policy-badge ${BADGE_CLASS[p.jurisdiction] || 'badge-category'}">${escHtml(p.jurisdiction)}</span>
-          <span class="policy-badge badge-category">${escHtml(p.category)}</span>
-          <span class="pd-date">生效：${escHtml(p.effective_date)}</span>
-        </div>
-      </div>
-      <div class="pd-summary">${escHtml(p.summary)}</div>
-      <div class="pd-requirements">
-        <div class="pd-section-title">关键合规要求</div>
-        ${reqs}
-      </div>
-      <div class="pd-examples">
-        <div class="pd-section-title">企业合规案例</div>
-        ${examples}
-      </div>
-      <button class="pd-ask-btn" onclick="askAIAboutPolicy('${safeNameAttr}')">
-        💬 向 AI 顾问提问关于此政策
-      </button>`;
-  } catch(e) {
-    panel.innerHTML =
-      `<div class="empty-state"><div class="big-icon">⚠️</div><p>加载失败：${escHtml(String(e))}</p></div>`;
+  if (isExpanding && body.dataset.loaded !== '1') {
+    try {
+      const res = await fetch(`${API}/policies/${policyId}`);
+      const p   = await res.json();
+      if (p.error) throw new Error(p.error);
+      renderPolicyCardBody(body, p);
+      body.dataset.loaded = '1';
+    } catch(e) {
+      body.innerHTML = `<p style="color:#ef4444;font-size:12px;padding:8px">加载失败：${escHtml(String(e))}</p>`;
+    }
   }
 }
 
+function renderPolicyCardBody(body, p) {
+  const reqs = p.key_requirements.map((r, i) => `
+    <div class="pc-req">
+      <div class="pc-req-num">${i+1}</div>
+      <div>${escHtml(r)}</div>
+    </div>`).join('');
+
+  const examples = p.compliance_examples.map(ex => `
+    <div class="pc-example">
+      <div class="pc-example-header">
+        <div>
+          <span class="pc-company">${escHtml(ex.company)}</span>
+          <span class="pc-company-meta"> · ${escHtml(ex.country)} · ${escHtml(ex.industry)}</span>
+        </div>
+        ${ex.example_url ? `<a class="pc-example-link" href="${escHtml(ex.example_url)}" target="_blank" rel="noopener">🔗 来源</a>` : ''}
+      </div>
+      <div class="pc-action">${escHtml(ex.action)}</div>
+      <div class="pc-result">✅ ${escHtml(ex.result)}</div>
+    </div>`).join('');
+
+  const safeName = p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  body.innerHTML = `
+    <div class="pc-section">关键合规要求</div>
+    ${reqs}
+    <div class="pc-section">企业合规案例</div>
+    ${examples}
+    <button class="pc-ask-btn" onclick="askAIAboutPolicy('${safeName}')">
+      💬 向 AI 顾问提问关于此政策
+    </button>`;
+}
+
 function askAIAboutPolicy(policyName) {
-  const q = `请详细解释"${policyName}"，并结合企业实际案例说明企业应如何有效落实这项政策。`;
-  document.getElementById('chat-input').value = q;
-  switchTab('chat');
-  sendChatMessage();
+  const q = `请详细解释「${policyName}」，并结合企业实际案例说明企业应如何有效落实这项政策。`;
+  document.getElementById('policy-chat-input').value = q;
+  sendPolicyMessage();
+}
+
+function handlePolicyChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPolicyMessage(); }
+}
+
+async function sendPolicyMessage() {
+  const input = document.getElementById('policy-chat-input');
+  const text  = input.value.trim();
+  if (!text || pIsStreaming) return;
+  input.value = ''; input.style.height = 'auto';
+  await sendPolicyRaw(text, true);
+}
+
+async function sendPolicyRaw(text, showUser) {
+  if (pIsStreaming) return;
+  pIsStreaming = true;
+  document.getElementById('policy-chat-send-btn').disabled = true;
+
+  if (showUser) {
+    removeEmpty('policy-chat-empty');
+    appendPolicyUserMsg(text);
+  }
+
+  pCurContent  = '';
+  pCurAssistEl = showUser ? createPolicyAssistBubble() : null;
+
+  try {
+    const res = await fetch(`${API}/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: policySessionId, message: text }),
+    });
+
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        handlePolicySSE(JSON.parse(line.slice(6)), showUser);
+      }
+    }
+  } catch (err) {
+    if (pCurAssistEl) pCurAssistEl.innerHTML = `<span style="color:#ef4444">⚠ 连接失败：${escHtml(String(err))}</span>`;
+  } finally {
+    pIsStreaming = false;
+    document.getElementById('policy-chat-send-btn').disabled = false;
+  }
+}
+
+function handlePolicySSE(payload, showUser) {
+  if (!showUser) return;
+  switch (payload.type) {
+    case 'token':
+      pCurContent += payload.content;
+      pCurAssistEl.innerHTML = marked.parse(pCurContent) + '<span class="cursor-blink"></span>';
+      policyScrollDown();
+      break;
+    case 'status':
+      showPolicyStatus(payload.content);
+      break;
+    case 'error':
+      document.querySelectorAll('#policy-chat-messages .status-msg').forEach(e => e.remove());
+      if (pCurAssistEl) pCurAssistEl.innerHTML = `<span style="color:#dc2626">⚠ ${escHtml(payload.content)}</span>`;
+      policyScrollDown();
+      break;
+    case 'done':
+      pCurAssistEl.innerHTML = marked.parse(pCurContent);
+      document.querySelectorAll('#policy-chat-messages .status-msg').forEach(e => e.remove());
+      policyScrollDown();
+      break;
+  }
+}
+
+function appendPolicyUserMsg(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  row.innerHTML = `<div class="msg-bubble">${escHtml(text)}</div>`;
+  document.getElementById('policy-chat-messages').appendChild(row);
+  policyScrollDown();
+}
+
+function createPolicyAssistBubble() {
+  const row = document.createElement('div');
+  row.className = 'msg-row assistant';
+  row.innerHTML = `<div class="msg-avatar">📜</div><div class="msg-bubble"><span class="cursor-blink"></span></div>`;
+  document.getElementById('policy-chat-messages').appendChild(row);
+  policyScrollDown();
+  return row.querySelector('.msg-bubble');
+}
+
+function showPolicyStatus(text) {
+  document.querySelectorAll('#policy-chat-messages .status-msg').forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'status-msg';
+  el.innerHTML = `<div class="spinner"></div><span>${escHtml(text)}</span>`;
+  document.getElementById('policy-chat-messages').appendChild(el);
+  policyScrollDown();
+}
+
+function policyScrollDown() {
+  const el = document.getElementById('policy-chat-messages');
+  el.scrollTop = el.scrollHeight;
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ POLICIES = [
         "jurisdiction": "全球",
         "effective_date": "2016-11-04",
         "category": "国际条约",
+        "source_url": "https://unfccc.int/process-and-meetings/the-paris-agreement/the-paris-agreement",
         "summary": "全球195个缔约方承诺将全球平均气温升幅控制在工业化前水平以上2°C以内，并努力限制在1.5°C以内。各国通过国家自主贡献（NDC）机制，每五年更新减排目标，推动全球低碳转型。",
         "key_requirements": [
             "各国须提交国家自主贡献（NDC），每5年更新并提高减排力度",
@@ -21,14 +22,16 @@ POLICIES = [
                 "country": "美国",
                 "industry": "科技",
                 "action": "承诺2030年实现全价值链碳中和，已推动超过320家供应商使用100%可再生能源，并发布年度《环境进展报告》对标NDC路径",
-                "result": "2023年范围1+2排放较2015年基准下降55%，产品碳足迹持续降低，获多项国际气候评级最高评级"
+                "result": "2023年范围1+2排放较2015年基准下降55%，产品碳足迹持续降低，获多项国际气候评级最高评级",
+                "example_url": "https://www.apple.com/environment/",
             },
             {
                 "company": "宁德时代（CATL）",
                 "country": "中国",
                 "industry": "制造业",
                 "action": "宜宾超级工厂实现100%可再生能源供电，通过TÜV莱茵零碳工厂认证，制定2035年实现核心运营碳中和路线图",
-                "result": "宜宾基地年碳排放量为零，成为全球首个获零碳认证的动力电池工厂"
+                "result": "宜宾基地年碳排放量为零，成为全球首个获零碳认证的动力电池工厂",
+                "example_url": "https://www.catl.com/cn/sustainability/",
             }
         ],
         "tags": ["气候", "NDC", "碳中和", "全球治理", "透明度"]
@@ -39,6 +42,7 @@ POLICIES = [
         "jurisdiction": "全球",
         "effective_date": "2017-06-29",
         "category": "信息披露框架",
+        "source_url": "https://www.fsb-tcfd.org/recommendations/",
         "summary": "由金融稳定委员会设立的TCFD框架要求企业从治理、战略、风险管理、指标与目标四大维度披露气候相关财务风险与机遇，已被全球超过4000家机构采纳，并成为多国法规强制要求的基础。",
         "key_requirements": [
             "治理（Governance）：董事会对气候相关风险与机遇的监督机制，以及管理层角色",
@@ -54,14 +58,16 @@ POLICIES = [
                 "country": "英国",
                 "industry": "金融",
                 "action": "完整实施TCFD四大支柱披露，开展1.5°C/2°C/4°C三种情景分析，评估贷款组合中的气候转型风险和物理风险敞口",
-                "result": "连续三年获CDP气候评级A级，绿色债券发行规模超350亿美元，气候信息披露质量位列全球银行业前10%"
+                "result": "连续三年获CDP气候评级A级，绿色债券发行规模超350亿美元，气候信息披露质量位列全球银行业前10%",
+                "example_url": "https://www.hsbc.com/who-we-are/esg-and-responsible-business/climate",
             },
             {
                 "company": "中国平安保险",
                 "country": "中国",
                 "industry": "金融",
                 "action": "采用TCFD框架进行气候风险披露，建立气候风险压力测试模型，评估高碳资产在碳价上升情景下的减值风险",
-                "result": "2023年绿色投资规模超1000亿元，完成中国保险业首份完整TCFD报告，纳入MSCI ESG评级体系"
+                "result": "2023年绿色投资规模超1000亿元，完成中国保险业首份完整TCFD报告，纳入MSCI ESG评级体系",
+                "example_url": "https://www.pingan.cn/esg/",
             }
         ],
         "tags": ["信息披露", "气候风险", "金融", "情景分析", "ESG"]
@@ -72,6 +78,7 @@ POLICIES = [
         "jurisdiction": "全球",
         "effective_date": "2001-01-01",
         "category": "核算标准",
+        "source_url": "https://ghgprotocol.org/corporate-standard",
         "summary": "由世界资源研究所（WRI）和世界可持续发展商业委员会（WBCSD）共同开发，是全球最广泛采用的企业温室气体核算和报告标准，将排放分为范围1（直接排放）、范围2（外购能源）、范围3（价值链）三类。",
         "key_requirements": [
             "范围1：核算企业拥有或控制的排放源产生的直接温室气体排放（燃烧、工艺过程、逸散等）",
@@ -87,14 +94,16 @@ POLICIES = [
                 "country": "美国",
                 "industry": "科技",
                 "action": "完整核算范围1、2、3排放，实施内部碳费机制（每吨CO₂收取15美元），资金用于可再生能源采购和碳去除项目",
-                "result": "2023年完成全范围3排放核算，碳强度较2020年下降28%，承诺2030年实现碳负排放"
+                "result": "2023年完成全范围3排放核算，碳强度较2020年下降28%，承诺2030年实现碳负排放",
+                "example_url": "https://www.microsoft.com/en-us/sustainability",
             },
             {
                 "company": "宝武钢铁集团",
                 "country": "中国",
                 "industry": "钢铁",
                 "action": "按GHG Protocol建立集团统一碳核算体系，覆盖全部钢铁生产工序，实现范围1和范围2排放的精确计量与第三方核查",
-                "result": "成为中国首批完成第三方核查的钢铁企业，吨钢碳排放强度进入全球行业前20%"
+                "result": "成为中国首批完成第三方核查的钢铁企业，吨钢碳排放强度进入全球行业前20%",
+                "example_url": "https://www.baowugroup.com/cn/sustainability",
             }
         ],
         "tags": ["碳核算", "范围1", "范围2", "范围3", "标准"]
@@ -105,6 +114,7 @@ POLICIES = [
         "jurisdiction": "全球",
         "effective_date": "2018-04-01",
         "category": "国际标准",
+        "source_url": "https://www.iso.org/standard/66453.html",
         "summary": "国际标准化组织发布的温室气体量化、监测、报告与核查国际标准，分为三部分：组织层面核算（14064-1）、项目层面核算（14064-2）、审定与核查（14064-3），是企业碳核查和碳市场准入的重要依据。",
         "key_requirements": [
             "ISO 14064-1：组织须确定组织边界和运营边界，量化并报告范围1和范围2排放，建立文件化的管理体系",
@@ -120,14 +130,16 @@ POLICIES = [
                 "country": "中国",
                 "industry": "水泥",
                 "action": "按ISO 14064-1建立集团碳排放管理体系，委托华测检测对全部生产基地开展第三方核查，并将核查结果用于全国碳市场配额清缴",
-                "result": "连续5年通过ISO 14064核查，吨水泥熟料碳排放强度达到行业领先水平，碳市场履约率100%"
+                "result": "连续5年通过ISO 14064核查，吨水泥熟料碳排放强度达到行业领先水平，碳市场履约率100%",
+                "example_url": "https://www.conch.cn/en/sustainability/",
             },
             {
                 "company": "西门子（Siemens）",
                 "country": "德国",
                 "industry": "制造业",
                 "action": "全球200余个生产基地统一按ISO 14064-1核算碳排放，并委托必维国际检验集团开展全球整合核查",
-                "result": "2023年获得ISO 14064认证，全球运营碳排放较2014年下降54%，提前实现碳中和目标"
+                "result": "2023年获得ISO 14064认证，全球运营碳排放较2014年下降54%，提前实现碳中和目标",
+                "example_url": "https://www.siemens.com/global/en/company/sustainability.html",
             }
         ],
         "tags": ["核查", "认证", "碳市场", "第三方", "标准"]
@@ -138,6 +150,7 @@ POLICIES = [
         "jurisdiction": "全球",
         "effective_date": "2015-09-01",
         "category": "自愿倡议",
+        "source_url": "https://sciencebasedtargets.org/companies-taking-action",
         "summary": "由CDP、联合国全球契约、WRI和WWF联合发起，要求企业设定与1.5°C气候目标一致的减排目标，并经独立机构审核认证。目前全球超7000家企业承诺，是企业气候行动最权威的国际认证之一。",
         "key_requirements": [
             "在加入后24个月内提交经SBTi验证的近期目标（5-10年）和长期目标（2050年净零）",
@@ -153,14 +166,16 @@ POLICIES = [
                 "country": "英国",
                 "industry": "消费品",
                 "action": "率先获得SBTi 1.5°C目标认证，将范围3排放目标纳入，与供应商共同推进农业和原材料采购端减排",
-                "result": "2023年范围1+2排放较2015年下降74%，成为消费品行业SBTi标杆，带动数百家供应商设定科学目标"
+                "result": "2023年范围1+2排放较2015年下降74%，成为消费品行业SBTi标杆，带动数百家供应商设定科学目标",
+                "example_url": "https://www.unilever.com/planet-and-society/",
             },
             {
                 "company": "比亚迪（BYD）",
                 "country": "中国",
                 "industry": "制造业",
                 "action": "承诺SBTi净零目标，推进刀片电池工厂全面使用绿电，并向供应商传导绿色采购要求",
-                "result": "2023年整车生产碳强度下降35%，绿电使用比例超60%，成为中国汽车行业SBTi承诺企业"
+                "result": "2023年整车生产碳强度下降35%，绿电使用比例超60%，成为中国汽车行业SBTi承诺企业",
+                "example_url": "https://www.bydglobal.com/cn/sustainability.html",
             }
         ],
         "tags": ["1.5°C", "净零", "减排目标", "科学目标", "认证"]
@@ -171,6 +186,7 @@ POLICIES = [
         "jurisdiction": "全球",
         "effective_date": "2014-09-01",
         "category": "自愿倡议",
+        "source_url": "https://www.there100.org/",
         "summary": "由气候组织和CDP共同发起，号召全球有重大影响力的企业承诺100%使用可再生电力，成员须在2050年前实现目标，并设定阶段性里程碑。目前全球超400家年营收超1亿美元的企业加入。",
         "key_requirements": [
             "加入后须设定具体可再生电力目标年份（最晚2050年），并制定阶段性里程碑",
@@ -186,14 +202,16 @@ POLICIES = [
                 "country": "中国台湾",
                 "industry": "半导体",
                 "action": "加入RE100并承诺2050年100%可再生电力，通过大规模签订离岸风电PPA和购买绿电凭证（TRECs）逐步提升绿电比例",
-                "result": "2023年可再生电力使用比例达14%，签订全球最大单一企业离岸风电采购合约（920MW），推动台湾可再生能源市场快速扩张"
+                "result": "2023年可再生电力使用比例达14%，签订全球最大单一企业离岸风电采购合约（920MW），推动台湾可再生能源市场快速扩张",
+                "example_url": "https://esg.tsmc.com/",
             },
             {
                 "company": "美的集团",
                 "country": "中国",
                 "industry": "制造业",
                 "action": "加入RE100，推进工厂屋顶光伏自发自用，并通过绿电交易市场购买可再生能源电力，建立工厂级绿电追踪体系",
-                "result": "2023年可再生电力比例达25%，屋顶光伏装机容量超300MW，成为国内家电行业RE100进展最快企业"
+                "result": "2023年可再生电力比例达25%，屋顶光伏装机容量超300MW，成为国内家电行业RE100进展最快企业",
+                "example_url": "https://www.midea.com/cn/sustainability",
             }
         ],
         "tags": ["可再生能源", "绿电", "100%", "PPA", "绿证"]
@@ -206,6 +224,7 @@ POLICIES = [
         "jurisdiction": "欧盟",
         "effective_date": "2005-01-01",
         "category": "碳市场",
+        "source_url": "https://climate.ec.europa.eu/eu-action/eu-emissions-trading-system-eu-ets_en",
         "summary": "全球规模最大的碳排放权交易体系，覆盖欧盟27国及冰岛、列支敦士登、挪威，采用「总量控制与交易」机制，对电力、钢铁、水泥、铝、化工、航空等高排放行业实施强制性碳配额管理。2023年改革后进一步收紧配额总量并扩大覆盖范围。",
         "key_requirements": [
             "覆盖行业须每年向主管机构清缴等量配额（EUA），1个EUA代表排放1吨CO₂当量的权利",
@@ -221,14 +240,16 @@ POLICIES = [
                 "country": "卢森堡",
                 "industry": "钢铁",
                 "action": "投资直接还原铁（DRI）+电弧炉（EAF）绿色钢铁工艺，替代传统高炉转炉流程，在根特工厂建设全球首个工业级绿氢炼钢设施",
-                "result": "预计新工艺吨钢碳排放减少约90%，已获欧盟创新基金2.15亿欧元支持，2026年投产后将大幅降低EU ETS履约成本"
+                "result": "预计新工艺吨钢碳排放减少约90%，已获欧盟创新基金2.15亿欧元支持，2026年投产后将大幅降低EU ETS履约成本",
+                "example_url": "https://corporate.arcelormittal.com/sustainability",
             },
             {
                 "company": "华润水泥",
                 "country": "中国（香港上市，在欧有业务）",
                 "industry": "水泥",
                 "action": "参照EU ETS标准建立内部碳价机制，推进窑炉节能改造和替代燃料使用（废轮胎、生物质），提高熟料替代率",
-                "result": "单位熟料热耗下降8%，碳排放强度改善12%，为应对未来出口欧盟时的CBAM征税奠定基础"
+                "result": "单位熟料热耗下降8%，碳排放强度改善12%，为应对未来出口欧盟时的CBAM征税奠定基础",
+                "example_url": "https://www.crc.com.hk/en/sustainability/",
             }
         ],
         "tags": ["碳市场", "配额", "欧盟", "碳交易", "履约"]
@@ -239,6 +260,7 @@ POLICIES = [
         "jurisdiction": "欧盟",
         "effective_date": "2023-10-01",
         "category": "贸易政策",
+        "source_url": "https://taxation-customs.ec.europa.eu/carbon-border-adjustment-mechanism_en",
         "summary": "欧盟于2023年10月启动CBAM过渡期，2026年全面实施。要求进口钢铁、水泥、铝、化肥、电力、氢气产品的欧盟进口商申报产品碳含量，并购买CBAM证书以补偿与EU ETS的碳价差，防止碳泄漏。",
         "key_requirements": [
             "过渡期（2023.10-2025.12）：进口商须按季度向欧盟主管机构报告进口商品的嵌入碳排放量，暂不需购买证书",
@@ -254,14 +276,16 @@ POLICIES = [
                 "country": "中国",
                 "industry": "钢铁",
                 "action": "成立CBAM专项工作组，系统梳理对欧出口产品碳足迹，按欧盟方法学开展嵌入碳核算，并推进低碳工艺技术改造（HBI+电弧炉）",
-                "result": "完成首批对欧出口钢材的CBAM报告，吨钢碳排放强度达到欧盟同类产品平均水平，规避约30%的潜在CBAM税负"
+                "result": "完成首批对欧出口钢材的CBAM报告，吨钢碳排放强度达到欧盟同类产品平均水平，规避约30%的潜在CBAM税负",
+                "example_url": "https://www.baosteel.com/en/sustainability/",
             },
             {
                 "company": "中国忠旺铝业",
                 "country": "中国",
                 "industry": "铝",
                 "action": "提高再生铝使用比例至40%，与水电资源丰富地区合作建立绿电铝生产基地，开展产品生命周期碳足迹评价（LCA）",
-                "result": "铝锭碳排放强度从行业平均18tCO₂/t降至11tCO₂/t，出口欧盟产品CBAM负担较高碳排放竞争对手降低约40%"
+                "result": "铝锭碳排放强度从行业平均18tCO₂/t降至11tCO₂/t，出口欧盟产品CBAM负担较高碳排放竞争对手降低约40%",
+                "example_url": "https://www.chalco.com.cn/chalcoen/ywzx/dqhbaq/",
             }
         ],
         "tags": ["碳关税", "贸易", "欧盟", "碳泄漏", "出口"]
@@ -272,6 +296,7 @@ POLICIES = [
         "jurisdiction": "欧盟",
         "effective_date": "2024-01-01",
         "category": "信息披露法规",
+        "source_url": "https://finance.ec.europa.eu/capital-markets-union-and-financial-markets/company-reporting-and-auditing/company-reporting/corporate-sustainability-reporting_en",
         "summary": "欧盟于2024年起分批实施CSRD，取代原有NFRD（非财务报告指令），要求企业按欧洲可持续发展报告准则（ESRS）披露气候、生物多样性、社会等议题信息，适用范围大幅扩展，预计覆盖全球约5万家企业。",
         "key_requirements": [
             "按ESRS E1（气候变化）披露：温室气体减排目标、范围1/2/3排放数据、气候转型计划、物理与转型风险敞口",
@@ -287,14 +312,16 @@ POLICIES = [
                 "country": "法国",
                 "industry": "食品",
                 "action": "作为CSRD试点企业，率先完成双重重要性评估，按ESRS E1披露全范围气候数据，并将气候KPI与高管薪酬挂钩",
-                "result": "2024年发布首份CSRD合规报告，获独立审计机构有限保证意见，成为CSRD实施标杆案例"
+                "result": "2024年发布首份CSRD合规报告，获独立审计机构有限保证意见，成为CSRD实施标杆案例",
+                "example_url": "https://www.danone.com/impact/planet/climate/",
             },
             {
                 "company": "海尔智家",
                 "country": "中国（在欧有重大业务）",
                 "industry": "制造业",
                 "action": "提前启动CSRD合规评估，识别欧盟业务相关的双重重要性议题，建立欧盟范围内的ESG数据采集平台，准备ESRS合规披露",
-                "result": "完成CSRD差距分析，制定2025年合规路线图，欧洲子公司ESG管理能力显著提升"
+                "result": "完成CSRD差距分析，制定2025年合规路线图，欧洲子公司ESG管理能力显著提升",
+                "example_url": "https://haier.com/cn/IR/esg.shtml",
             }
         ],
         "tags": ["ESG披露", "欧盟", "ESRS", "可持续报告", "双重重要性"]
@@ -307,6 +334,7 @@ POLICIES = [
         "jurisdiction": "中国",
         "effective_date": "2021-07-16",
         "category": "碳市场",
+        "source_url": "https://www.mee.gov.cn/ywgz/ydqhbh/wsqtkz/",
         "summary": "中国于2021年启动全国碳市场，首批覆盖电力行业约2200家重点排放单位，排放量超过45亿吨，是全球覆盖排放量最大的碳市场。按行业基准值（BM法）分配免费配额，逐步收紧并扩大至更多行业。",
         "key_requirements": [
             "年度排放量达到2.6万吨CO₂当量以上的重点排放单位须强制参与，当前覆盖发电行业",
@@ -322,14 +350,16 @@ POLICIES = [
                 "country": "中国",
                 "industry": "电力",
                 "action": "建立集团统一碳资产管理平台，对旗下各发电机组配额盈缺进行动态测算，通过煤耗优化和机组技改持续降低碳排放强度",
-                "result": "连续两个履约周期100%按时清缴，配额盈余率超10%，碳资产管理创造经济效益超2亿元"
+                "result": "连续两个履约周期100%按时清缴，配额盈余率超10%，碳资产管理创造经济效益超2亿元",
+                "example_url": "https://www.chd.com.cn/en/sustainability/",
             },
             {
                 "company": "国家电投集团",
                 "country": "中国",
                 "industry": "电力",
                 "action": "大力发展可再生能源，风电光伏装机规模全球第一，清洁能源收入占比持续提升，降低碳市场履约压力",
-                "result": "2023年清洁能源装机占比超65%，碳排放强度全国最低，成为国内碳市场中配额盈余最多的央企之一"
+                "result": "2023年清洁能源装机占比超65%，碳排放强度全国最低，成为国内碳市场中配额盈余最多的央企之一",
+                "example_url": "https://www.spic.com.cn/hjsh/",
             }
         ],
         "tags": ["碳市场", "配额", "中国", "MRV", "CCER", "履约"]
@@ -340,6 +370,7 @@ POLICIES = [
         "jurisdiction": "中国",
         "effective_date": "2020-09-22",
         "category": "国家战略",
+        "source_url": "https://www.gov.cn/zhengce/2021-10/26/content_5644984.htm",
         "summary": "中国承诺2030年前实现碳达峰、2060年前实现碳中和（「双碳」目标），由「1+N」政策体系构成，包括顶层《意见》、《2030年前碳达峰行动方案》以及各行业碳达峰实施方案和配套政策，是企业绿色转型的总体战略框架。",
         "key_requirements": [
             "2030年目标：碳排放强度较2005年下降65%以上，非化石能源占一次能源消费比重达25%左右，森林蓄积量增加60亿立方米",
@@ -355,14 +386,16 @@ POLICIES = [
                 "country": "中国",
                 "industry": "化工",
                 "action": "发布《碳达峰碳中和行动方案》，承诺2050年实现碳中和，推进「减油增化增新」转型，大力发展氢能业务（加氢站超千座），建设万亩碳汇林",
-                "result": "2023年碳排放强度较2015年下降27%，绿氢产能全国第一，新能源及氢能业务收入年均增速超40%"
+                "result": "2023年碳排放强度较2015年下降27%，绿氢产能全国第一，新能源及氢能业务收入年均增速超40%",
+                "example_url": "https://www.sinopec.com/listco/en/social_responsibility/",
             },
             {
                 "company": "万科企业",
                 "country": "中国",
                 "industry": "房地产",
                 "action": "制定2030年碳达峰路线图，推进绿色建筑设计和绿色建材采购，试点零碳社区项目，引导业主和物业使用可再生能源",
-                "result": "新建项目绿色建筑认证率100%，运营碳排放强度下降18%，成为国内房地产行业双碳实践标杆"
+                "result": "新建项目绿色建筑认证率100%，运营碳排放强度下降18%，成为国内房地产行业双碳实践标杆",
+                "example_url": "https://www.vanke.com/csr/",
             }
         ],
         "tags": ["双碳", "碳达峰", "碳中和", "中国", "2030", "2060"]
@@ -373,6 +406,7 @@ POLICIES = [
         "jurisdiction": "中国",
         "effective_date": "2017-01-01",
         "category": "认证标准",
+        "source_url": "https://www.miit.gov.cn/jgsj/jns/lsyj/",
         "summary": "工业和信息化部推动的绿色制造体系核心组成，对厂房集约化、原料无害化、生产洁净化、废物资源化、能源低碳化五大维度进行评价，列入名单的企业享受优先政策支持，是制造业绿色转型的重要抓手。",
         "key_requirements": [
             "厂房集约化：建筑节能设计满足国家标准，厂区绿化率≥15%，单位面积产值不低于行业平均水平",
@@ -388,14 +422,16 @@ POLICIES = [
                 "country": "中国",
                 "industry": "制造业",
                 "action": "对珠海、合肥等主要生产基地开展绿色化改造，建设屋顶光伏、绿色照明和余热回收系统，推行精益生产减少能耗",
-                "result": "获批国家绿色工厂称号，单位产值综合能耗下降15%，年节约电能超5000万度，每年减少碳排放约4万吨"
+                "result": "获批国家绿色工厂称号，单位产值综合能耗下降15%，年节约电能超5000万度，每年减少碳排放约4万吨",
+                "example_url": "https://www.gree.com.cn/corporate-responsibility/",
             },
             {
                 "company": "青岛啤酒",
                 "country": "中国",
                 "industry": "食品",
                 "action": "系统推进节水节能改造，引入CO₂回收再利用装置，建设数字化能源管理系统，推进包装轻量化",
-                "result": "吨酒能耗下降18%，水耗下降22%，获全国绿色工厂称号，固废综合利用率达100%"
+                "result": "吨酒能耗下降18%，水耗下降22%，获全国绿色工厂称号，固废综合利用率达100%",
+                "example_url": "https://www.tsingtao.com.cn/cn/report",
             }
         ],
         "tags": ["绿色制造", "认证", "节能", "中国", "工业", "工信部"]
@@ -406,6 +442,7 @@ POLICIES = [
         "jurisdiction": "中国",
         "effective_date": "2018-10-26",
         "category": "法律法规",
+        "source_url": "http://www.npc.gov.cn/npc/c2/c30834/201811/t20181114_296015.html",
         "summary": "中国节能领域基本法，要求年综合能耗1000吨标准煤以上的重点用能单位实施节能管理，开展能源审计，执行能耗限额标准，是企业能耗双控和碳排放管理的核心法律依据。",
         "key_requirements": [
             "重点用能单位（年耗能≥1000吨标煤）须设立能源管理岗位，配备专职能源管理人员",
@@ -421,14 +458,16 @@ POLICIES = [
                 "country": "中国",
                 "industry": "铝",
                 "action": "全面完成落后电解铝产能淘汰，推广新一代节能铝电解槽技术（400kA以上），大幅降低吨铝交流电耗",
-                "result": "吨铝综合交流电耗降至全行业最优水平（约13000度/吨），连续多年通过能源审计，被评为节能先进单位"
+                "result": "吨铝综合交流电耗降至全行业最优水平（约13000度/吨），连续多年通过能源审计，被评为节能先进单位",
+                "example_url": "https://www.chalco.com.cn/",
             },
             {
                 "company": "伊利集团",
                 "country": "中国",
                 "industry": "食品",
                 "action": "建立集团能源管理信息化平台，实时监控各工厂能耗数据，推进蒸汽冷凝水回收和余热利用，开展全员节能培训",
-                "result": "单位产值综合能耗连续5年下降，累计节能量超30万吨标准煤，超额完成国家下达的节能目标"
+                "result": "单位产值综合能耗连续5年下降，累计节能量超30万吨标准煤，超额完成国家下达的节能目标",
+                "example_url": "https://www.yili.com/csr/",
             }
         ],
         "tags": ["节能", "能耗双控", "中国", "法律", "重点用能单位"]
@@ -439,6 +478,7 @@ POLICIES = [
         "jurisdiction": "中国",
         "effective_date": "2022-11-01",
         "category": "行业政策",
+        "source_url": "https://www.miit.gov.cn/jgsj/jns/wjfb/",
         "summary": "工信部、发展改革委、生态环境部联合发布，明确钢铁行业2030年前实现碳达峰的路径，要求推进节能降碳改造、严控新增产能、发展电炉短流程炼钢、提升废钢利用率，并将碳排放纳入行业准入条件。",
         "key_requirements": [
             "严格落实产能置换政策，确保钢铁行业产能只减不增，禁止新增高炉-转炉长流程产能",
@@ -461,7 +501,8 @@ POLICIES = [
                 "country": "中国",
                 "industry": "钢铁",
                 "action": "新建600MW绿电配套项目和全电弧炉短流程产线，废钢比提升至45%，建设废钢智能化加工配送中心",
-                "result": "新电炉产线吨钢碳排放仅为高炉流程的30%，成为国内废钢回收利用和短流程炼钢的示范企业"
+                "result": "新电炉产线吨钢碳排放仅为高炉流程的30%，成为国内废钢回收利用和短流程炼钢的示范企业",
+                "example_url": "https://www.ztsteel.com/",
             }
         ],
         "tags": ["钢铁", "碳达峰", "电炉", "废钢", "中国", "行业政策"]
@@ -472,6 +513,7 @@ POLICIES = [
         "jurisdiction": "中国",
         "effective_date": "2022-03-01",
         "category": "行业政策",
+        "source_url": "https://www.miit.gov.cn/jgsj/jns/hxxyjjh/",
         "summary": "工信部发布，指导石化化工行业推进绿色低碳发展，聚焦原料替代、过程减排、产品绿色化和循环化利用，要求石化化工企业制定绿色发展规划，推进清洁生产，提高资源利用效率，减少碳排放和污染物排放。",
         "key_requirements": [
             "推进原料绿色化：提高可再生原料和生物基原料使用比例，减少对化石原料的依赖",
@@ -487,14 +529,16 @@ POLICIES = [
                 "country": "中国",
                 "industry": "化工",
                 "action": "建设工业园区能量集成优化系统，推进蒸汽余热梯级利用，开发生物基MDI技术，建立全球首个MDI零废水排放生产体系",
-                "result": "单位产品综合能耗较行业平均水平低25%，获国家绿色工厂和绿色供应链称号，VOCs排放量三年累计减少40%"
+                "result": "单位产品综合能耗较行业平均水平低25%，获国家绿色工厂和绿色供应链称号，VOCs排放量三年累计减少40%",
+                "example_url": "https://www.wanhuachem.com/en/sustainability/",
             },
             {
                 "company": "巴斯夫（BASF）中国",
                 "country": "德国（在华运营）",
                 "industry": "化工",
                 "action": "推进Verbund（一体化）生产模式，实现副产品和废热的循环利用，采购绿色电力，推广可生物降解塑料产品线",
-                "result": "中国运营温室气体排放强度持续下降，上海一体化基地获中国绿色工厂认证，再生原料使用比例超20%"
+                "result": "中国运营温室气体排放强度持续下降，上海一体化基地获中国绿色工厂认证，再生原料使用比例超20%",
+                "example_url": "https://www.basf.com/cn/zh/who-we-are/sustainability.html",
             }
         ],
         "tags": ["化工", "绿色发展", "清洁生产", "中国", "循环经济"]
