@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from data_loader import DataLoader
 from scorer import CarbonScorer
+from policies import POLICIES
 
 # ── Provider 配置 ─────────────────────────────────────────────────
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
@@ -58,17 +59,29 @@ SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询�
 你具备以下能力：
 1. 解答碳排放、碳交易、碳中和政策、ESG 相关问题
 2. 使用 carbon_score 工具查询数据库中企业的碳表现评分
+3. 使用 search_policies 工具搜索全球碳政策库
+4. 使用 get_policy_detail 工具获取政策详情和企业合规案例
 
-使用 carbon_score 工具的时机：
+【carbon_score 工具使用时机】
 - 用户明确询问某企业的碳评分、碳表现、碳数据时
 - 用户提供了企业ID（格式：COMP_XXX）时
 - 如果用户未提供企业ID或年度，请先询问
+- 数据库中可用企业ID：COMP_001 ~ COMP_010，年度：2024
 
-数据库中可用的企业ID示例：COMP_001 ~ COMP_010，年度：2024
+【search_policies 工具使用时机】
+- 用户询问某行业适用哪些碳政策时，传入 industry 参数
+- 用户询问某地区（欧盟/中国/全球）的政策时，传入 jurisdiction 参数
+- 用户泛问"有哪些碳政策"时，可不传参数获取全部列表
+
+【get_policy_detail 工具使用时机】
+- 用户询问某具体政策的详细内容时，必须调用此工具获取完整信息
+- 解释任何政策时，务必引用工具返回的真实企业合规案例，用具体行动和数据让说明生动易懂
+- 若已知当前企业所在行业，主动推荐最相关政策
 
 回答要求：
 - 全程使用专业简洁的中文
-- 对工具返回的评分数据，请深入解读，给出洞察和建议
+- 解释政策时必须结合企业案例，帮助客户理解如何在实践中落实
+- 向特定行业企业推荐政策时，优先推荐与其行业强相关的政策
 - 使用 Markdown 格式，适当使用标题、列表让回答结构清晰
 """
 
@@ -91,6 +104,41 @@ TOOLS = [
             },
             "required": ["company_id", "report_year"]
         }
+    },
+    {
+        "name": "search_policies",
+        "description": "搜索全球碳政策库，可按关键词、行业或地区筛选。返回匹配的政策列表（含名称、地区、摘要）。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "搜索关键词，如 CBAM、碳市场、可再生能源"
+                },
+                "industry": {
+                    "type": "string",
+                    "description": "行业名称，如：钢铁、电力、化工、水泥、制造业、金融"
+                },
+                "jurisdiction": {
+                    "type": "string",
+                    "description": "地区，可选值：全球、欧盟、中国"
+                }
+            }
+        }
+    },
+    {
+        "name": "get_policy_detail",
+        "description": "获取指定政策的完整详情，包含关键合规要求和真实企业合规案例。解释具体政策时必须调用此工具。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "policy_id": {
+                    "type": "string",
+                    "description": "政策ID，如 PARIS_AGREEMENT、EU_ETS、CBAM、CN_ETS、SBTI 等"
+                }
+            },
+            "required": ["policy_id"]
+        }
     }
 ]
 
@@ -102,6 +150,45 @@ def execute_carbon_score(company_id: str, report_year: int) -> str:
     data = _loader.fetch(company_id, report_year)
     result = _scorer.score(data)
     return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+def execute_search_policies(keyword: str = None, industry: str = None, jurisdiction: str = None) -> str:
+    results = POLICIES
+    if jurisdiction:
+        results = [p for p in results if p["jurisdiction"] == jurisdiction]
+    if industry:
+        results = [p for p in results if "all" in p["industries"] or industry in p["industries"]]
+    if keyword:
+        kw = keyword.lower()
+        results = [p for p in results if
+                   kw in p["name"].lower() or kw in p["summary"].lower()
+                   or any(kw in t for t in p["tags"])]
+    return json.dumps([{
+        "id": p["id"], "name": p["name"], "jurisdiction": p["jurisdiction"],
+        "category": p["category"], "summary": p["summary"][:120] + "…",
+        "industries": p["industries"]
+    } for p in results], ensure_ascii=False, indent=2)
+
+
+def execute_get_policy_detail(policy_id: str) -> str:
+    policy = next((p for p in POLICIES if p["id"] == policy_id), None)
+    if not policy:
+        return json.dumps({"error": f"未找到政策 {policy_id}，请检查ID是否正确"}, ensure_ascii=False)
+    return json.dumps(policy, ensure_ascii=False, indent=2)
+
+
+def execute_tool(tool_name: str, inputs: dict) -> str:
+    if tool_name == "carbon_score":
+        return execute_carbon_score(inputs["company_id"], inputs["report_year"])
+    elif tool_name == "search_policies":
+        return execute_search_policies(
+            keyword=inputs.get("keyword"),
+            industry=inputs.get("industry"),
+            jurisdiction=inputs.get("jurisdiction"),
+        )
+    elif tool_name == "get_policy_detail":
+        return execute_get_policy_detail(inputs["policy_id"])
+    return json.dumps({"error": f"未知工具: {tool_name}"})
 
 
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
@@ -134,14 +221,19 @@ async def agent_stream(session_id: str, user_message: str):
                     if block.type == "text" and block.text.strip():
                         yield f"data: {json.dumps({'type': 'token', 'content': block.text})}\n\n"
                     elif block.type == "tool_use":
-                        cid = block.input.get("company_id", "")
-                        yr  = block.input.get("report_year", "")
-                        yield f"data: {json.dumps({'type': 'status', 'content': f'🔍 正在查询 {cid}（{yr} 年）碳评分数据...'})}\n\n"
+                        status_map = {
+                            "carbon_score":     f'🔍 正在查询企业碳评分数据…',
+                            "search_policies":  f'📜 正在搜索政策库…',
+                            "get_policy_detail": f'📋 正在获取政策详情…',
+                        }
+                        status_msg = status_map.get(block.name, f'🔧 正在调用工具 {block.name}…')
+                        yield f"data: {json.dumps({'type': 'status', 'content': status_msg})}\n\n"
                         loop = asyncio.get_event_loop()
+                        _block = block
                         try:
                             result_str = await loop.run_in_executor(
                                 None,
-                                lambda: execute_carbon_score(block.input["company_id"], block.input["report_year"])
+                                lambda: execute_tool(_block.name, _block.input)
                             )
                             yield f"data: {json.dumps({'type': 'status', 'content': '✅ 数据获取完成，正在生成分析...'})}\n\n"
                         except Exception as tool_err:
@@ -264,6 +356,24 @@ async def get_history(company_id: str):
             ],
         })
     return sorted(out, key=lambda x: x["report_year"])
+
+
+@app.get("/policies")
+async def list_policies(keyword: str = None, industry: str = None, jurisdiction: str = None):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: execute_search_policies(keyword, industry, jurisdiction)
+    )
+    return json.loads(result)
+
+
+@app.get("/policies/{policy_id}")
+async def get_policy(policy_id: str):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: execute_get_policy_detail(policy_id)
+    )
+    return json.loads(result)
 
 
 @app.get("/", response_class=HTMLResponse)
