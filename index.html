@@ -236,7 +236,10 @@
     .gap-panel-title { font-size: 13.5px; font-weight: 700; color: var(--green-dark); }
     .gap-panel-close { background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0 4px; }
     .gap-panel-close:hover { color: var(--text); }
-    .gap-content { padding: 18px 22px; font-size: 13.5px; line-height: 1.7; color: var(--text); }
+    .gap-content { padding: 18px 22px; max-height: calc(100vh - 260px); overflow-y: auto; scroll-behavior: smooth; font-size: 13.5px; line-height: 1.7; color: var(--text); }
+    .gap-content::-webkit-scrollbar { width: 5px; }
+    .gap-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .gap-content::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
     .gap-content h2 { font-size: 15px; font-weight: 700; margin: 16px 0 8px; color: var(--text); }
     .gap-content h2:first-child { margin-top: 0; }
     .gap-content table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 8px 0 14px; }
@@ -335,8 +338,9 @@
       scroll-behavior: smooth; display: flex; flex-direction: column; gap: 16px;
     }
 
-    #chat-messages::-webkit-scrollbar { width: 4px; }
-    #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    #chat-messages::-webkit-scrollbar { width: 5px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    #chat-messages::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
     .chat-empty {
       flex: 1; display: flex; flex-direction: column;
@@ -453,8 +457,9 @@
     .chip:hover { background: var(--green-light); color: var(--green-dark); border-color: var(--green-mid); }
 
     /* ── Scrollbar ─────────────────────────────────────── */
-    .tab-content::-webkit-scrollbar { width: 4px; }
-    .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .tab-content::-webkit-scrollbar { width: 5px; }
+    .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .tab-content::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
     /* ── Tab 5: 政策库 ──────────────────────────────────── */
     #tab-policy { padding: 0; flex-direction: row; overflow: hidden; }
@@ -480,8 +485,9 @@
 
     /* Level 1 — policy list */
     .policy-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-    .policy-list::-webkit-scrollbar { width: 4px; }
-    .policy-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .policy-list::-webkit-scrollbar { width: 5px; }
+    .policy-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .policy-list::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
     .policy-badge { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 99px; }
     .badge-global   { background: #e0f2fe; color: #0369a1; }
     .badge-eu       { background: #ede9fe; color: #5b21b6; }
@@ -497,8 +503,9 @@
 
     /* Level 2 — policy detail */
     .pd-scroll { flex: 1; overflow-y: auto; padding: 16px; }
-    .pd-scroll::-webkit-scrollbar { width: 4px; }
-    .pd-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .pd-scroll::-webkit-scrollbar { width: 5px; }
+    .pd-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .pd-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
     .pd-title { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.35; margin-bottom: 6px; }
     .pd-meta { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
     .pd-date { font-size: 11px; color: var(--text-muted); }
@@ -521,8 +528,9 @@
 
     /* Level 3 — example detail */
     .pex-scroll { flex: 1; overflow-y: auto; padding: 16px; }
-    .pex-scroll::-webkit-scrollbar { width: 4px; }
-    .pex-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .pex-scroll::-webkit-scrollbar { width: 5px; }
+    .pex-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .pex-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
     .pex-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
     .pex-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
     .pex-company { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; }
@@ -550,8 +558,9 @@
     .policy-chat-header-title { font-size: 14px; font-weight: 600; color: var(--text); }
     .policy-chat-header-sub { font-size: 12px; color: var(--text-muted); }
     #policy-chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
-    #policy-chat-messages::-webkit-scrollbar { width: 4px; }
-    #policy-chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    #policy-chat-messages::-webkit-scrollbar { width: 5px; }
+    #policy-chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    #policy-chat-messages::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
     .policy-chat-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--text-muted); text-align: center; padding: 32px; }
     .policy-chat-empty .big-icon { font-size: 36px; opacity: .3; }
     #policy-chat-input-area { padding: 10px 20px 14px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
@@ -1607,8 +1616,7 @@ function handleGapSSE(payload, content, btn) {
   if (payload.type === 'token') {
     gapCurContent += text;
     content.innerHTML = marked.parse(gapCurContent);
-    const tab = document.getElementById('tab-overview');
-    if (tab) tab.scrollTop = tab.scrollHeight;
+    content.scrollTop = content.scrollHeight;
   } else if (payload.type === 'status') {
     const statusLine = document.createElement('div');
     statusLine.className = 'gap-status-line';
