@@ -1605,17 +1605,18 @@ async function generateGapAnalysis() {
 }
 
 function handleGapSSE(payload, content, btn) {
+  const text = payload.content ?? payload.text ?? '';
   if (payload.type === 'token') {
-    gapCurContent += payload.text;
+    gapCurContent += text;
     content.innerHTML = marked.parse(gapCurContent);
     content.scrollTop = content.scrollHeight;
   } else if (payload.type === 'status') {
     const statusLine = document.createElement('div');
     statusLine.className = 'gap-status-line';
-    statusLine.textContent = '🔍 ' + payload.text;
+    statusLine.textContent = '🔍 ' + text;
     content.appendChild(statusLine);
   } else if (payload.type === 'error') {
-    content.innerHTML += `<div style="color:#e53935">错误：${payload.text}</div>`;
+    content.innerHTML += `<div style="color:#e53935">错误：${text}</div>`;
     gapIsStreaming = false;
     if (btn) { btn.disabled = false; btn.textContent = '📊 重新生成分析'; }
   } else if (payload.type === 'done') {
