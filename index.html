@@ -439,7 +439,7 @@
     #tab-policy { padding: 0; flex-direction: row; overflow: hidden; }
 
     /* Left panel */
-    .policy-left { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
+    .policy-left { flex: 3; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
     .policy-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 12px 10px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
     .policy-search { width: 100%; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); outline: none; background: #f9fafb; color: var(--text); }
     .policy-search:focus { border-color: var(--green); background: var(--surface); }
@@ -480,13 +480,19 @@
     .pc-company-meta { font-size: 11px; color: var(--text-muted); }
     .pc-example-link { font-size: 11px; color: var(--green); text-decoration: none; white-space: nowrap; }
     .pc-example-link:hover { text-decoration: underline; }
+    .pc-problem { font-size: 12px; color: #92400e; background: #fef3c7; border-radius: 5px; padding: 5px 9px; line-height: 1.55; margin-bottom: 5px; }
+    .pc-problem-label { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; margin-bottom: 2px; color: #b45309; }
     .pc-action { font-size: 12px; color: var(--text); line-height: 1.55; margin-bottom: 5px; }
+    .pc-action-label { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; margin-bottom: 2px; color: var(--text-muted); }
     .pc-result { font-size: 11.5px; color: var(--green-dark); background: var(--green-light); border-radius: 5px; padding: 5px 9px; line-height: 1.5; }
+    .pc-result-label { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; margin-bottom: 2px; color: #166534; }
+    .pc-fulltext-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--green); text-decoration: none; font-weight: 600; margin-bottom: 10px; }
+    .pc-fulltext-link:hover { text-decoration: underline; }
     .pc-ask-btn { width: 100%; margin-top: 10px; padding: 9px; background: var(--green); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s; }
     .pc-ask-btn:hover { background: var(--green-hover); }
 
     /* Right panel — policy chat */
-    .policy-chat-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .policy-chat-panel { flex: 1; min-width: 260px; max-width: 400px; display: flex; flex-direction: column; overflow: hidden; }
     .policy-chat-header { padding: 13px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
     .policy-chat-header-title { font-size: 14px; font-weight: 600; color: var(--text); }
     .policy-chat-header-sub { font-size: 12px; color: var(--text-muted); }
@@ -1232,14 +1238,19 @@ function renderPolicyCardBody(body, p) {
           <span class="pc-company">${escHtml(ex.company)}</span>
           <span class="pc-company-meta"> · ${escHtml(ex.country)} · ${escHtml(ex.industry)}</span>
         </div>
-        ${ex.example_url ? `<a class="pc-example-link" href="${escHtml(ex.example_url)}" target="_blank" rel="noopener">🔗 来源</a>` : ''}
+        ${ex.example_url ? `<a class="pc-example-link" href="${escHtml(ex.example_url)}" target="_blank" rel="noopener">🔗 企业来源</a>` : ''}
       </div>
-      <div class="pc-action">${escHtml(ex.action)}</div>
-      <div class="pc-result">✅ ${escHtml(ex.result)}</div>
+      ${ex.problem ? `<div class="pc-problem"><div class="pc-problem-label">⚠️ 面临挑战</div>${escHtml(ex.problem)}</div>` : ''}
+      <div><div class="pc-action-label">🔧 应对措施</div><div class="pc-action">${escHtml(ex.action)}</div></div>
+      <div class="pc-result"><div class="pc-result-label">✅ 量化成效</div>${escHtml(ex.result)}</div>
     </div>`).join('');
 
   const safeName = p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const sourceLink = p.source_url
+    ? `<a class="pc-fulltext-link" href="${escHtml(p.source_url)}" target="_blank" rel="noopener">📄 查看政策原文全文 →</a>`
+    : '';
   body.innerHTML = `
+    ${sourceLink}
     <div class="pc-section">关键合规要求</div>
     ${reqs}
     <div class="pc-section">企业合规案例</div>
