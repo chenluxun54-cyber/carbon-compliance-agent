@@ -163,7 +163,7 @@
     .card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 20px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow); flex-shrink: 0;
     }
 
     .card-title {
@@ -174,6 +174,7 @@
     /* ── Tab 1: 评分概览 ───────────────────────────────── */
     #overview-top {
       display: grid; grid-template-columns: 260px 1fr; gap: 20px;
+      flex-shrink: 0;
     }
 
     .score-ring-card {
@@ -227,16 +228,16 @@
     .dim-score-txt { font-size: 12px; color: var(--text-muted); text-align: right; }
 
     /* ── Gap Analysis ──────────────────────────────────── */
-    #gap-trigger-row { padding: 6px 0 16px; display: flex; justify-content: flex-start; }
+    #gap-trigger-row { padding: 6px 0 16px; display: flex; justify-content: flex-start; flex-shrink: 0; }
     #gap-generate-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 20px; background: var(--green); color: #fff; border: none; border-radius: 9px; font-size: 13.5px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s, opacity .15s; box-shadow: 0 1px 4px rgba(22,163,74,.25); }
     #gap-generate-btn:hover { background: var(--green-hover); }
     #gap-generate-btn:disabled { opacity: .45; cursor: not-allowed; }
-    .gap-panel { background: var(--surface); border: 1.5px solid var(--green-mid); border-radius: 12px; overflow: hidden; margin-bottom: 20px; box-shadow: var(--shadow-md); }
+    .gap-panel { background: var(--surface); border: 1.5px solid var(--green-mid); border-radius: 12px; overflow: hidden; margin-bottom: 20px; box-shadow: var(--shadow-md); flex-shrink: 0; }
     .gap-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: var(--green-light); border-bottom: 1px solid var(--green-mid); }
     .gap-panel-title { font-size: 13.5px; font-weight: 700; color: var(--green-dark); }
     .gap-panel-close { background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0 4px; }
     .gap-panel-close:hover { color: var(--text); }
-    .gap-content { padding: 18px 22px; max-height: calc(100vh - 260px); overflow-y: auto; scroll-behavior: smooth; font-size: 13.5px; line-height: 1.7; color: var(--text); }
+    .gap-content { padding: 18px 22px; height: calc(100vh - 280px); min-height: 300px; overflow-y: auto; scroll-behavior: smooth; font-size: 13.5px; line-height: 1.7; color: var(--text); }
     .gap-content::-webkit-scrollbar { width: 5px; }
     .gap-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
     .gap-content::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
@@ -254,6 +255,7 @@
     .accordion-item {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+      flex-shrink: 0;
     }
 
     .accordion-header {
@@ -323,7 +325,7 @@
     .method-tag.direct { background: #fef3c7; color: #92400e; }
 
     /* ── Tab 3: 历史趋势 ───────────────────────────────── */
-    .chart-card { padding: 24px; }
+    .chart-card { padding: 24px; flex-shrink: 0; }
     .chart-wrap { position: relative; height: 320px; }
 
     /* ── Tab 4: AI 对话 ────────────────────────────────── */
