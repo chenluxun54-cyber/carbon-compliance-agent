@@ -142,6 +142,50 @@ TOOLS = [
     }
 ]
 
+# ── Gap Analysis System Prompt ───────────────────────────────────
+GAP_ANALYSIS_SYSTEM_PROMPT = """你是一位资深双碳合规顾问，专门为企业生成合规差距分析与改进路线图。
+
+你会收到一份企业的六维度碳评分 JSON，格式包含：
+- total_score / 100 总分
+- dimensions 数组：每个维度的 score、max_score、percentage、各指标的 score / percentile / missing
+- company_id、company_name、industry、report_year、sample_size
+
+你的任务：
+1. 识别最薄弱的 2~3 个维度（percentage 最低）
+2. 针对薄弱维度，调用 search_policies 找到最相关的政策（传入 industry 参数）
+3. 对关键政策调用 get_policy_detail 获取具体合规要求，供路线图参考
+4. 输出一份结构清晰的中文 Markdown 分析报告，包含以下四个部分：
+
+---
+
+## 📊 总体评价
+- 总分、行业百分位、与行业标杆差距（简明 1~2 段）
+
+## ⚠️ 主要差距
+用 Markdown 表格列出最薄弱的 2~3 个维度：
+| 维度 | 当前得分 | 满分 | 达成率 | 距 80% 达标线差距 | 最弱指标 |
+（最弱指标：percentile 最低的 1~2 个，说明其数值含义）
+
+## 🗺️ 改进路线图
+对每个薄弱维度给出具体改进建议，格式：
+**[维度名]**
+- 具体行动：（2~3 条可落地的措施，越量化越好）
+- 预期提分：（保守估计可提升多少分）
+- 建议时间表：（短期 <6个月 / 中期 6~18个月 / 长期 >18个月）
+- 参考政策：（列出工具返回的相关政策名称）
+
+## 📜 关键合规政策
+列出与本企业最相关的 2~3 条政策，每条包含：政策名、适用原因（1句话）
+
+---
+
+输出要求：
+- 全程使用中文
+- 数据引用必须来自输入的 JSON，不要编造百分位或分数
+- 路线图措施必须具体可操作，避免空洞建议
+- 篇幅控制在 600~900 字之间
+"""
+
 # ── 会话存储（内存）─────────────────────────────────────────────
 sessions: dict[str, list] = {}
 
@@ -374,6 +418,95 @@ async def get_policy(policy_id: str):
         None, lambda: execute_get_policy_detail(policy_id)
     )
     return json.loads(result)
+
+
+# ── Gap Analysis Stream ──────────────────────────────────────────
+async def gap_analysis_stream(score_data: dict):
+    if not cfg["api_key"]:
+        key_var = "ANTHROPIC_API_KEY" if MODEL_PROVIDER == "anthropic" else "MINIMAX_API_KEY"
+        yield f"data: {json.dumps({'type': 'error', 'content': f'未设置 {key_var} 环境变量。'})}\n\n"
+        return
+
+    user_msg = (
+        f"请对以下企业的碳评分数据进行合规差距分析，并生成改进路线图。\n\n"
+        f"```json\n{json.dumps(score_data, ensure_ascii=False, indent=2)}\n```"
+    )
+    messages = [{"role": "user", "content": user_msg}]
+
+    try:
+        while True:
+            response = await client.messages.create(
+                model=cfg["model"],
+                max_tokens=4096,
+                system=GAP_ANALYSIS_SYSTEM_PROMPT,
+                tools=TOOLS,
+                messages=messages,
+            )
+
+            if response.stop_reason == "tool_use":
+                messages.append({"role": "assistant", "content": response.content})
+                tool_results = []
+                for block in response.content:
+                    if block.type == "text" and block.text.strip():
+                        yield f"data: {json.dumps({'type': 'token', 'content': block.text})}\n\n"
+                    elif block.type == "tool_use":
+                        status_map = {
+                            "search_policies":   "📜 正在搜索相关政策…",
+                            "get_policy_detail": "📋 正在获取政策详情…",
+                        }
+                        status_msg = status_map.get(block.name, f"🔧 正在调用工具 {block.name}…")
+                        yield f"data: {json.dumps({'type': 'status', 'content': status_msg})}\n\n"
+                        loop = asyncio.get_event_loop()
+                        _block = block
+                        try:
+                            result_str = await loop.run_in_executor(
+                                None, lambda: execute_tool(_block.name, _block.input)
+                            )
+                            yield f"data: {json.dumps({'type': 'status', 'content': '✅ 政策数据加载完成，正在生成路线图…'})}\n\n"
+                        except Exception as tool_err:
+                            result_str = f"错误：{str(tool_err)}"
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": result_str,
+                        })
+                messages.append({"role": "user", "content": tool_results})
+
+            else:
+                text = ""
+                for block in response.content:
+                    if block.type == "text":
+                        text += block.text
+                words = text.split(" ")
+                for i, word in enumerate(words):
+                    chunk = word + (" " if i < len(words) - 1 else "")
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+                    await asyncio.sleep(0.015)
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                break
+
+    except Exception as e:
+        err_msg = str(e)
+        if "authentication" in err_msg.lower() or "401" in err_msg:
+            err_msg = "API Key 无效，请检查环境变量后重启服务。"
+        yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
+
+
+@app.post("/gap_analysis")
+async def gap_analysis_endpoint(request: Request):
+    body = await request.json()
+    company_id  = body.get("company_id", "").strip()
+    report_year = int(body.get("report_year", 0))
+    if not company_id or not report_year:
+        return {"error": "缺少 company_id 或 report_year"}
+    loop = asyncio.get_event_loop()
+    raw   = await loop.run_in_executor(None, lambda: _loader.fetch(company_id, report_year))
+    score = await loop.run_in_executor(None, lambda: _scorer.score(raw))
+    return StreamingResponse(
+        gap_analysis_stream(score),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)

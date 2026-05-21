@@ -226,6 +226,29 @@
 
     .dim-score-txt { font-size: 12px; color: var(--text-muted); text-align: right; }
 
+    /* ── Gap Analysis ──────────────────────────────────── */
+    #gap-trigger-row { padding: 6px 0 16px; display: flex; justify-content: flex-start; }
+    #gap-generate-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 20px; background: var(--green); color: #fff; border: none; border-radius: 9px; font-size: 13.5px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s, opacity .15s; box-shadow: 0 1px 4px rgba(22,163,74,.25); }
+    #gap-generate-btn:hover { background: var(--green-hover); }
+    #gap-generate-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .gap-panel { background: var(--surface); border: 1.5px solid var(--green-mid); border-radius: 12px; overflow: hidden; margin-bottom: 20px; box-shadow: var(--shadow-md); }
+    .gap-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: var(--green-light); border-bottom: 1px solid var(--green-mid); }
+    .gap-panel-title { font-size: 13.5px; font-weight: 700; color: var(--green-dark); }
+    .gap-panel-close { background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0 4px; }
+    .gap-panel-close:hover { color: var(--text); }
+    .gap-content { padding: 18px 22px; max-height: 520px; overflow-y: auto; font-size: 13.5px; line-height: 1.7; color: var(--text); }
+    .gap-content::-webkit-scrollbar { width: 4px; }
+    .gap-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .gap-content h2 { font-size: 15px; font-weight: 700; margin: 16px 0 8px; color: var(--text); }
+    .gap-content h2:first-child { margin-top: 0; }
+    .gap-content table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 8px 0 14px; }
+    .gap-content th { background: #f3f4f6; padding: 6px 10px; text-align: left; font-weight: 600; border: 1px solid var(--border); }
+    .gap-content td { padding: 6px 10px; border: 1px solid var(--border); vertical-align: top; }
+    .gap-content strong { color: var(--text); }
+    .gap-content ul, .gap-content ol { padding-left: 20px; margin: 4px 0 10px; }
+    .gap-content li { margin-bottom: 3px; }
+    .gap-status-line { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-muted); padding: 6px 0; }
+
     /* ── Tab 2: 维度详情 ───────────────────────────────── */
     .accordion-item {
       background: var(--surface); border: 1px solid var(--border);
@@ -769,6 +792,10 @@ let historyData  = null;
 let companiesList = [];
 let histChart    = null;
 
+// Gap analysis state
+let gapIsStreaming = false;
+let gapCurContent  = '';
+
 // Session + streaming
 let sessionId   = null;
 let isStreaming  = false;
@@ -913,7 +940,24 @@ function renderOverview(d) {
         ${dimRows}
       </div>
     </div>
+
+    <div id="gap-trigger-row">
+      <button id="gap-generate-btn" onclick="generateGapAnalysis()">
+        📊 生成合规差距分析
+      </button>
+    </div>
+
+    <div id="gap-panel" class="gap-panel" style="display:none">
+      <div class="gap-panel-header">
+        <span class="gap-panel-title">📋 合规差距分析报告 · ${d.company_name} · ${d.report_year} 年</span>
+        <button class="gap-panel-close" onclick="closeGapPanel()" title="关闭">×</button>
+      </div>
+      <div class="gap-content" id="gap-content"></div>
+    </div>
   `;
+  // reset gap state on new query
+  gapIsStreaming = false;
+  gapCurContent  = '';
 }
 
 function getRankLabel(pct) {
@@ -1506,6 +1550,86 @@ function showPolicyStatus(text) {
 function policyScrollDown() {
   const el = document.getElementById('policy-chat-messages');
   el.scrollTop = el.scrollHeight;
+}
+
+// ── Gap Analysis ─────────────────────────────────────────────────────
+async function generateGapAnalysis() {
+  if (!scoreData || gapIsStreaming) return;
+  const panel = document.getElementById('gap-panel');
+  const content = document.getElementById('gap-content');
+  const btn = document.getElementById('gap-generate-btn');
+  if (!panel || !content || !btn) return;
+
+  gapIsStreaming = true;
+  gapCurContent  = '';
+  panel.style.display = 'block';
+  content.innerHTML   = '<div class="gap-status-line">⏳ 正在分析合规差距，请稍候…</div>';
+  btn.disabled = true;
+  btn.textContent = '⏳ 分析中…';
+
+  try {
+    const resp = await fetch('/gap_analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company_id:  scoreData.company_id,
+        report_year: scoreData.report_year
+      })
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    let   buf    = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const payload = JSON.parse(line.slice(5).trim());
+          handleGapSSE(payload, content, btn);
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    content.innerHTML = `<div style="color:#e53935">请求失败：${err.message}</div>`;
+    gapIsStreaming = false;
+    btn.disabled = false;
+    btn.textContent = '📊 重新生成分析';
+  }
+}
+
+function handleGapSSE(payload, content, btn) {
+  if (payload.type === 'token') {
+    gapCurContent += payload.text;
+    content.innerHTML = marked.parse(gapCurContent);
+    content.scrollTop = content.scrollHeight;
+  } else if (payload.type === 'status') {
+    const statusLine = document.createElement('div');
+    statusLine.className = 'gap-status-line';
+    statusLine.textContent = '🔍 ' + payload.text;
+    content.appendChild(statusLine);
+  } else if (payload.type === 'error') {
+    content.innerHTML += `<div style="color:#e53935">错误：${payload.text}</div>`;
+    gapIsStreaming = false;
+    if (btn) { btn.disabled = false; btn.textContent = '📊 重新生成分析'; }
+  } else if (payload.type === 'done') {
+    if (gapCurContent) content.innerHTML = marked.parse(gapCurContent);
+    gapIsStreaming = false;
+    if (btn) { btn.disabled = false; btn.textContent = '📊 重新生成分析'; }
+  }
+}
+
+function closeGapPanel() {
+  const panel = document.getElementById('gap-panel');
+  if (panel) panel.style.display = 'none';
+  gapIsStreaming = false;
+  gapCurContent  = '';
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────
