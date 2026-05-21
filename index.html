@@ -438,58 +438,90 @@
     /* ── Tab 5: 政策库 ──────────────────────────────────── */
     #tab-policy { padding: 0; flex-direction: row; overflow: hidden; }
 
-    /* Left panel */
+    /* Left panel — 3-level navigation */
     .policy-left { flex: 3; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
     .policy-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 12px 10px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
     .policy-search { width: 100%; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); outline: none; background: #f9fafb; color: var(--text); }
     .policy-search:focus { border-color: var(--green); background: var(--surface); }
     .policy-toolbar select { flex: 1; height: 32px; font-size: 12px; }
+
+    /* View stack */
+    .policy-views { flex: 1; position: relative; overflow: hidden; }
+    .policy-view { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; transition: transform .25s ease, opacity .25s ease; }
+    .policy-view.pv-hidden { transform: translateX(100%); opacity: 0; pointer-events: none; }
+    .policy-view.pv-behind { transform: translateX(-40%); opacity: 0; pointer-events: none; }
+
+    /* Nav bar (back button) inside detail/example views */
+    .pv-nav { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+    .pv-back-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--green); background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px; font-family: var(--font); transition: background .15s; }
+    .pv-back-btn:hover { background: var(--green-light); }
+    .pv-breadcrumb { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Level 1 — policy list */
     .policy-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
     .policy-list::-webkit-scrollbar { width: 4px; }
     .policy-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    /* Policy cards */
-    .policy-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color .15s, box-shadow .15s; }
-    .policy-card:hover { border-color: var(--green-mid); }
-    .policy-card.expanded { border-color: var(--green); box-shadow: var(--shadow-md); }
-    .policy-card-top { padding: 12px 14px; cursor: pointer; }
-    .policy-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-    .policy-card-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; flex: 1; }
-    .policy-card-chevron { font-size: 10px; color: var(--text-muted); flex-shrink: 0; margin-top: 3px; transition: transform .2s; }
-    .policy-card.expanded .policy-card-chevron { transform: rotate(180deg); }
-    .policy-card-meta { display: flex; gap: 5px; margin-bottom: 7px; flex-wrap: wrap; }
     .policy-badge { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 99px; }
     .badge-global   { background: #e0f2fe; color: #0369a1; }
     .badge-eu       { background: #ede9fe; color: #5b21b6; }
     .badge-cn       { background: #fef3c7; color: #92400e; }
     .badge-category { background: #f3f4f6; color: var(--text-muted); }
-    .policy-card-summary { font-size: 12px; color: var(--text-muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }
-    .policy-source-link { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--green); text-decoration: none; font-weight: 500; }
-    .policy-source-link:hover { text-decoration: underline; }
+    .pl-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: border-color .15s, box-shadow .15s; display: flex; flex-direction: column; gap: 6px; }
+    .pl-card:hover { border-color: var(--green-mid); box-shadow: var(--shadow-md); }
+    .pl-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .pl-card-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; flex: 1; }
+    .pl-card-arrow { font-size: 11px; color: var(--text-muted); flex-shrink: 0; margin-top: 2px; }
+    .pl-card-meta { display: flex; gap: 5px; flex-wrap: wrap; }
+    .pl-card-summary { font-size: 12px; color: var(--text-muted); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-    /* Expanded body */
-    .policy-card-body { border-top: 1px solid var(--border); padding: 12px 14px; background: #fafafa; display: none; }
-    .policy-card.expanded .policy-card-body { display: block; }
-    .pc-section { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin: 10px 0 6px; }
-    .pc-section:first-child { margin-top: 0; }
-    .pc-req { display: flex; gap: 8px; font-size: 12px; color: var(--text); line-height: 1.55; margin-bottom: 5px; }
-    .pc-req-num { width: 18px; height: 18px; border-radius: 50%; background: var(--green-light); color: var(--green-dark); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
-    .pc-example { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 7px; }
-    .pc-example-header { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
-    .pc-company { font-size: 12.5px; font-weight: 600; color: var(--text); }
-    .pc-company-meta { font-size: 11px; color: var(--text-muted); }
-    .pc-example-link { font-size: 11px; color: var(--green); text-decoration: none; white-space: nowrap; }
-    .pc-example-link:hover { text-decoration: underline; }
-    .pc-problem { font-size: 12px; color: #92400e; background: #fef3c7; border-radius: 5px; padding: 5px 9px; line-height: 1.55; margin-bottom: 5px; }
-    .pc-problem-label { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; margin-bottom: 2px; color: #b45309; }
-    .pc-action { font-size: 12px; color: var(--text); line-height: 1.55; margin-bottom: 5px; }
-    .pc-action-label { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; margin-bottom: 2px; color: var(--text-muted); }
-    .pc-result { font-size: 11.5px; color: var(--green-dark); background: var(--green-light); border-radius: 5px; padding: 5px 9px; line-height: 1.5; }
-    .pc-result-label { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; margin-bottom: 2px; color: #166534; }
-    .pc-fulltext-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--green); text-decoration: none; font-weight: 600; margin-bottom: 10px; }
-    .pc-fulltext-link:hover { text-decoration: underline; }
-    .pc-ask-btn { width: 100%; margin-top: 10px; padding: 9px; background: var(--green); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s; }
-    .pc-ask-btn:hover { background: var(--green-hover); }
+    /* Level 2 — policy detail */
+    .pd-scroll { flex: 1; overflow-y: auto; padding: 16px; }
+    .pd-scroll::-webkit-scrollbar { width: 4px; }
+    .pd-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .pd-title { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.35; margin-bottom: 6px; }
+    .pd-meta { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+    .pd-date { font-size: 11px; color: var(--text-muted); }
+    .pd-source-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--green); text-decoration: none; font-weight: 600; margin-bottom: 12px; }
+    .pd-source-link:hover { text-decoration: underline; }
+    .pd-summary { font-size: 13px; color: var(--text); line-height: 1.65; margin-bottom: 14px; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border-left: 3px solid var(--green-mid); }
+    .pd-section { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; margin: 14px 0 8px; }
+    .pd-req { display: flex; gap: 9px; font-size: 12.5px; color: var(--text); line-height: 1.6; margin-bottom: 7px; }
+    .pd-req-num { width: 20px; height: 20px; border-radius: 50%; background: var(--green-light); color: var(--green-dark); font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .pd-ex-item { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 11px 13px; margin-bottom: 7px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    .pd-ex-item:hover { border-color: var(--green-mid); box-shadow: var(--shadow-md); }
+    .pd-ex-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .pd-ex-body { flex: 1; min-width: 0; }
+    .pd-ex-company { font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .pd-ex-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .pd-ex-teaser { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .pd-ex-arrow { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+    .pd-ask-btn { width: 100%; margin-top: 4px; padding: 10px; background: var(--green); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s; }
+    .pd-ask-btn:hover { background: var(--green-hover); }
+
+    /* Level 3 — example detail */
+    .pex-scroll { flex: 1; overflow-y: auto; padding: 16px; }
+    .pex-scroll::-webkit-scrollbar { width: 4px; }
+    .pex-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .pex-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+    .pex-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+    .pex-company { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; }
+    .pex-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .pex-source-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--green); text-decoration: none; font-weight: 600; margin-top: 4px; }
+    .pex-source-link:hover { text-decoration: underline; }
+    .pex-block { border-radius: 9px; padding: 11px 13px; margin-bottom: 10px; }
+    .pex-block-label { font-size: 11px; font-weight: 700; letter-spacing: .4px; margin-bottom: 5px; }
+    .pex-block-text { font-size: 12.5px; line-height: 1.65; }
+    .pex-problem { background: #fef3c7; border-left: 3px solid #f59e0b; }
+    .pex-problem .pex-block-label { color: #b45309; }
+    .pex-problem .pex-block-text { color: #78350f; }
+    .pex-action { background: #f0f9ff; border-left: 3px solid #38bdf8; }
+    .pex-action .pex-block-label { color: #0369a1; }
+    .pex-action .pex-block-text { color: var(--text); }
+    .pex-result { background: var(--green-light); border-left: 3px solid var(--green); }
+    .pex-result .pex-block-label { color: #166534; }
+    .pex-result .pex-block-text { color: var(--green-dark); }
+    .pex-ask-btn { width: 100%; margin-top: 6px; padding: 10px; background: var(--green); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: var(--font); cursor: pointer; transition: background .15s; }
+    .pex-ask-btn:hover { background: var(--green-hover); }
 
     /* Right panel — policy chat */
     .policy-chat-panel { flex: 1; min-width: 260px; max-width: 400px; display: flex; flex-direction: column; overflow: hidden; }
@@ -614,7 +646,9 @@
     <!-- Tab: 政策库 -->
     <div id="tab-policy" class="tab-content">
       <div class="policy-left">
-        <div class="policy-toolbar">
+
+        <!-- Toolbar (Level 1 only) -->
+        <div class="policy-toolbar" id="policy-toolbar">
           <input class="policy-search" id="policy-search" type="text"
             placeholder="🔍 搜索政策名称、关键词…" oninput="filterPolicies()">
           <select id="policy-jurisdiction" onchange="filterPolicies()">
@@ -636,23 +670,51 @@
             <option value="铝">铝</option>
           </select>
         </div>
-        <div class="policy-list" id="policy-list">
-          <div class="loading"><div class="spinner"></div> 加载政策库…</div>
+
+        <!-- View stack -->
+        <div class="policy-views">
+
+          <!-- Level 1: Policy list -->
+          <div class="policy-view" id="pv-list">
+            <div class="policy-list" id="policy-list">
+              <div class="loading"><div class="spinner"></div> 加载政策库…</div>
+            </div>
+          </div>
+
+          <!-- Level 2: Policy detail -->
+          <div class="policy-view pv-hidden" id="pv-detail">
+            <div class="pv-nav">
+              <button class="pv-back-btn" onclick="pvGoBack('list')">← 返回列表</button>
+              <span class="pv-breadcrumb" id="pv-breadcrumb-detail"></span>
+            </div>
+            <div class="pd-scroll" id="pd-scroll"></div>
+          </div>
+
+          <!-- Level 3: Example detail -->
+          <div class="policy-view pv-hidden" id="pv-example">
+            <div class="pv-nav">
+              <button class="pv-back-btn" onclick="pvGoBack('detail')">← 返回政策详情</button>
+              <span class="pv-breadcrumb" id="pv-breadcrumb-example"></span>
+            </div>
+            <div class="pex-scroll" id="pex-scroll"></div>
+          </div>
+
         </div>
       </div>
+
       <div class="policy-chat-panel">
         <div class="policy-chat-header">
           <span style="font-size:18px">📜</span>
           <div>
             <div class="policy-chat-header-title">政策顾问 AI</div>
-            <div class="policy-chat-header-sub">展开左侧政策卡片，点击「向 AI 提问」即可深入了解</div>
+            <div class="policy-chat-header-sub" id="policy-chat-sub">点击左侧政策 → 案例，再点「向 AI 提问」</div>
           </div>
         </div>
         <div id="policy-chat-messages">
           <div class="policy-chat-empty" id="policy-chat-empty">
             <div class="big-icon">📜</div>
             <p style="font-size:13px;max-width:260px;line-height:1.6">
-              选择左侧政策后点击「向 AI 顾问提问」，或直接在下方输入问题
+              浏览左侧政策详情或案例，点击「向 AI 顾问提问」深入了解
             </p>
           </div>
         </div>
@@ -1138,12 +1200,15 @@ marked.setOptions({ breaks: true, gfm: true });
 
 // ── Policy Library ───────────────────────────────────────────────────
 let allPolicies     = [];
+let policyCache     = {};   // id → full policy detail
+let pCurrentPolicy  = null; // full policy object shown in level 2
 let policySessionId = null;
 let pIsStreaming    = false;
 let pCurAssistEl    = null;
 let pCurContent     = '';
 
 const BADGE_CLASS = { '全球': 'badge-global', '欧盟': 'badge-eu', '中国': 'badge-cn' };
+const INDUSTRY_ICONS = { '科技': '💻', '金融': '🏦', '制造业': '🏭', '钢铁': '⚙️', '电力': '⚡', '化工': '🧪', '水泥': '🏗️', '铝': '🔩', '食品': '🌾', '房地产': '🏢', '半导体': '🔬', '消费品': '🛒', '航空': '✈️' };
 
 async function initPolicyChatSession() {
   const res = await fetch(`${API}/new_session`, { method: 'POST' });
@@ -1174,6 +1239,7 @@ function filterPolicies() {
   renderPolicyList(list);
 }
 
+// ── Level 1: Policy list ─────────────────────────────────────────────
 function renderPolicyList(policies) {
   if (!policies.length) {
     document.getElementById('policy-list').innerHTML =
@@ -1183,85 +1249,152 @@ function renderPolicyList(policies) {
   document.getElementById('policy-list').innerHTML = policies.map(p => {
     const bc = BADGE_CLASS[p.jurisdiction] || 'badge-category';
     return `
-      <div class="policy-card" id="pc-${p.id}">
-        <div class="policy-card-top" onclick="togglePolicyCard('${p.id}')">
-          <div class="policy-card-header">
-            <div class="policy-card-name">${escHtml(p.name)}</div>
-            <div class="policy-card-chevron">▼</div>
-          </div>
-          <div class="policy-card-meta">
-            <span class="policy-badge ${bc}">${escHtml(p.jurisdiction)}</span>
-            <span class="policy-badge badge-category">${escHtml(p.category)}</span>
-          </div>
-          <div class="policy-card-summary">${escHtml(p.summary)}</div>
-          ${p.source_url ? `<a class="policy-source-link" href="${escHtml(p.source_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 原文链接</a>` : ''}
+      <div class="pl-card" onclick="pvGoDetail('${p.id}')">
+        <div class="pl-card-header">
+          <div class="pl-card-name">${escHtml(p.name)}</div>
+          <div class="pl-card-arrow">›</div>
         </div>
-        <div class="policy-card-body" id="pcb-${p.id}">
-          <div class="loading"><div class="spinner"></div> 加载详情…</div>
+        <div class="pl-card-meta">
+          <span class="policy-badge ${bc}">${escHtml(p.jurisdiction)}</span>
+          <span class="policy-badge badge-category">${escHtml(p.category)}</span>
         </div>
+        <div class="pl-card-summary">${escHtml(p.summary)}</div>
       </div>`;
   }).join('');
 }
 
-async function togglePolicyCard(policyId) {
-  const card = document.getElementById(`pc-${policyId}`);
-  const body = document.getElementById(`pcb-${policyId}`);
-  if (!card || !body) return;
+// ── Navigation stack ─────────────────────────────────────────────────
+function pvShow(level) {
+  // level: 'list' | 'detail' | 'example'
+  const views = { list: 'pv-list', detail: 'pv-detail', example: 'pv-example' };
+  const order = ['list', 'detail', 'example'];
+  const cur   = order.indexOf(level);
+  for (let i = 0; i < order.length; i++) {
+    const el = document.getElementById(views[order[i]]);
+    if (i === cur)       { el.classList.remove('pv-hidden', 'pv-behind'); }
+    else if (i < cur)    { el.classList.remove('pv-hidden'); el.classList.add('pv-behind'); }
+    else                 { el.classList.remove('pv-behind'); el.classList.add('pv-hidden'); }
+  }
+  // show/hide toolbar
+  document.getElementById('policy-toolbar').style.display = level === 'list' ? '' : 'none';
+}
 
-  const isExpanding = !card.classList.contains('expanded');
-  card.classList.toggle('expanded', isExpanding);
+function pvGoBack(target) { pvShow(target); }
 
-  if (isExpanding && body.dataset.loaded !== '1') {
-    try {
+// ── Level 2: Policy detail ───────────────────────────────────────────
+async function pvGoDetail(policyId) {
+  pvShow('detail');
+  const scroll = document.getElementById('pd-scroll');
+  scroll.innerHTML = `<div class="loading" style="padding:24px"><div class="spinner"></div> 加载中…</div>`;
+
+  try {
+    if (!policyCache[policyId]) {
       const res = await fetch(`${API}/policies/${policyId}`);
-      const p   = await res.json();
-      if (p.error) throw new Error(p.error);
-      renderPolicyCardBody(body, p);
-      body.dataset.loaded = '1';
-    } catch(e) {
-      body.innerHTML = `<p style="color:#ef4444;font-size:12px;padding:8px">加载失败：${escHtml(String(e))}</p>`;
+      policyCache[policyId] = await res.json();
     }
+    const p = policyCache[policyId];
+    pCurrentPolicy = p;
+    document.getElementById('pv-breadcrumb-detail').textContent = p.name;
+    renderPolicyDetail(scroll, p);
+  } catch(e) {
+    scroll.innerHTML = `<p style="color:#ef4444;padding:16px">加载失败：${escHtml(String(e))}</p>`;
   }
 }
 
-function renderPolicyCardBody(body, p) {
+function renderPolicyDetail(container, p) {
+  const bc   = BADGE_CLASS[p.jurisdiction] || 'badge-category';
   const reqs = p.key_requirements.map((r, i) => `
-    <div class="pc-req">
-      <div class="pc-req-num">${i+1}</div>
+    <div class="pd-req">
+      <div class="pd-req-num">${i+1}</div>
       <div>${escHtml(r)}</div>
     </div>`).join('');
 
-  const examples = p.compliance_examples.map(ex => `
-    <div class="pc-example">
-      <div class="pc-example-header">
-        <div>
-          <span class="pc-company">${escHtml(ex.company)}</span>
-          <span class="pc-company-meta"> · ${escHtml(ex.country)} · ${escHtml(ex.industry)}</span>
+  const exItems = p.compliance_examples.map((ex, i) => {
+    const icon = INDUSTRY_ICONS[ex.industry] || '🏢';
+    const teaser = ex.problem || ex.action || '';
+    return `
+      <div class="pd-ex-item" onclick="pvGoExample(${i})">
+        <div class="pd-ex-icon">${icon}</div>
+        <div class="pd-ex-body">
+          <div class="pd-ex-company">${escHtml(ex.company)}</div>
+          <div class="pd-ex-meta">${escHtml(ex.country)} · ${escHtml(ex.industry)}</div>
+          <div class="pd-ex-teaser">${escHtml(teaser)}</div>
         </div>
-        ${ex.example_url ? `<a class="pc-example-link" href="${escHtml(ex.example_url)}" target="_blank" rel="noopener">🔗 企业来源</a>` : ''}
-      </div>
-      ${ex.problem ? `<div class="pc-problem"><div class="pc-problem-label">⚠️ 面临挑战</div>${escHtml(ex.problem)}</div>` : ''}
-      <div><div class="pc-action-label">🔧 应对措施</div><div class="pc-action">${escHtml(ex.action)}</div></div>
-      <div class="pc-result"><div class="pc-result-label">✅ 量化成效</div>${escHtml(ex.result)}</div>
-    </div>`).join('');
+        <div class="pd-ex-arrow">›</div>
+      </div>`;
+  }).join('');
 
   const safeName = p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const sourceLink = p.source_url
-    ? `<a class="pc-fulltext-link" href="${escHtml(p.source_url)}" target="_blank" rel="noopener">📄 查看政策原文全文 →</a>`
-    : '';
-  body.innerHTML = `
-    ${sourceLink}
-    <div class="pc-section">关键合规要求</div>
+  container.innerHTML = `
+    <div class="pd-title">${escHtml(p.name)}</div>
+    <div class="pd-meta">
+      <span class="policy-badge ${bc}">${escHtml(p.jurisdiction)}</span>
+      <span class="policy-badge badge-category">${escHtml(p.category)}</span>
+      <span class="pd-date">生效：${escHtml(p.effective_date)}</span>
+    </div>
+    ${p.source_url ? `<a class="pd-source-link" href="${escHtml(p.source_url)}" target="_blank" rel="noopener">📄 查看政策原文 →</a>` : ''}
+    <div class="pd-summary">${escHtml(p.summary)}</div>
+    <div class="pd-section">关键合规要求</div>
     ${reqs}
-    <div class="pc-section">企业合规案例</div>
-    ${examples}
-    <button class="pc-ask-btn" onclick="askAIAboutPolicy('${safeName}')">
+    <div class="pd-section">企业合规案例（点击查看详情）</div>
+    ${exItems}
+    <button class="pd-ask-btn" onclick="askAIAboutPolicy('${safeName}')">
       💬 向 AI 顾问提问关于此政策
     </button>`;
 }
 
+// ── Level 3: Example detail ──────────────────────────────────────────
+function pvGoExample(idx) {
+  if (!pCurrentPolicy) return;
+  const ex = pCurrentPolicy.compliance_examples[idx];
+  if (!ex) return;
+
+  pvShow('example');
+  document.getElementById('pv-breadcrumb-example').textContent = ex.company;
+
+  const icon = INDUSTRY_ICONS[ex.industry] || '🏢';
+  const safeName     = pCurrentPolicy.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const safeCompany  = ex.company.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  document.getElementById('pex-scroll').innerHTML = `
+    <div class="pex-header">
+      <div class="pex-icon">${icon}</div>
+      <div>
+        <div class="pex-company">${escHtml(ex.company)}</div>
+        <div class="pex-meta">${escHtml(ex.country)} · ${escHtml(ex.industry)}</div>
+        ${ex.example_url ? `<a class="pex-source-link" href="${escHtml(ex.example_url)}" target="_blank" rel="noopener">🔗 企业ESG来源 →</a>` : ''}
+      </div>
+    </div>
+
+    ${ex.problem ? `
+    <div class="pex-block pex-problem">
+      <div class="pex-block-label">⚠️ 面临挑战</div>
+      <div class="pex-block-text">${escHtml(ex.problem)}</div>
+    </div>` : ''}
+
+    <div class="pex-block pex-action">
+      <div class="pex-block-label">🔧 应对措施</div>
+      <div class="pex-block-text">${escHtml(ex.action)}</div>
+    </div>
+
+    <div class="pex-block pex-result">
+      <div class="pex-block-label">✅ 量化成效</div>
+      <div class="pex-block-text">${escHtml(ex.result)}</div>
+    </div>
+
+    <button class="pex-ask-btn" onclick="askAIAboutExample('${safeName}', '${safeCompany}')">
+      💬 向 AI 顾问提问此案例
+    </button>`;
+}
+
 function askAIAboutPolicy(policyName) {
-  const q = `请详细解释「${policyName}」，并结合企业实际案例说明企业应如何有效落实这项政策。`;
+  const q = `请详细解释「${policyName}」对企业的合规要求，以及企业应如何有效落实。`;
+  document.getElementById('policy-chat-input').value = q;
+  sendPolicyMessage();
+}
+
+function askAIAboutExample(policyName, companyName) {
+  const q = `请结合「${policyName}」政策，深入分析${companyName}的合规实践：它面临哪些挑战？采取了哪些措施？取得了哪些成果？对同行业企业有什么借鉴意义？`;
   document.getElementById('policy-chat-input').value = q;
   sendPolicyMessage();
 }
