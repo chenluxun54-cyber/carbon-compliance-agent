@@ -18,6 +18,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from agent_runner import AgentRunner
+
 # ── 确保从 carbon_skill 目录运行（让 DataLoader 能找到 xlsx 文件）──
 os.chdir(Path(__file__).parent)
 sys.path.insert(0, str(Path(__file__).parent))
@@ -139,6 +141,29 @@ TOOLS = [
             },
             "required": ["policy_id"]
         }
+    },
+    {
+        "name": "ask_client",
+        "description": "当你需要客户提供公开数据中没有的信息时调用此工具。例如：内部碳排放目标、认证情况、未披露的能耗数据等。调用后对话将暂停等待客户回答。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "向客户提出的具体问题，语言简洁清晰"
+                },
+                "field_name": {
+                    "type": "string",
+                    "description": "字段标识符，如 carbon_target、certification_type、renewable_ratio"
+                },
+                "field_type": {
+                    "type": "string",
+                    "enum": ["text", "number", "choice", "yesno"],
+                    "description": "回答类型：text=文本, number=数值, choice=多选一, yesno=是/否"
+                }
+            },
+            "required": ["question", "field_name", "field_type"]
+        }
     }
 ]
 
@@ -235,6 +260,10 @@ def execute_tool(tool_name: str, inputs: dict) -> str:
     return json.dumps({"error": f"未知工具: {tool_name}"})
 
 
+# ── AgentRunner 单例（依赖 execute_tool，须在其后定义）──────────
+_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_tool)
+
+
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
 async def agent_stream(session_id: str, user_message: str):
     if not cfg["api_key"]:
@@ -249,61 +278,8 @@ async def agent_stream(session_id: str, user_message: str):
     messages.append({"role": "user", "content": user_message})
 
     try:
-        while True:
-            response = await client.messages.create(
-                model=cfg["model"],
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                tools=TOOLS,
-                messages=messages,
-            )
-
-            if response.stop_reason == "tool_use":
-                messages.append({"role": "assistant", "content": response.content})
-                tool_results = []
-                for block in response.content:
-                    if block.type == "text" and block.text.strip():
-                        yield f"data: {json.dumps({'type': 'token', 'content': block.text})}\n\n"
-                    elif block.type == "tool_use":
-                        status_map = {
-                            "carbon_score":     f'🔍 正在查询企业碳评分数据…',
-                            "search_policies":  f'📜 正在搜索政策库…',
-                            "get_policy_detail": f'📋 正在获取政策详情…',
-                        }
-                        status_msg = status_map.get(block.name, f'🔧 正在调用工具 {block.name}…')
-                        yield f"data: {json.dumps({'type': 'status', 'content': status_msg})}\n\n"
-                        loop = asyncio.get_event_loop()
-                        _block = block
-                        try:
-                            result_str = await loop.run_in_executor(
-                                None,
-                                lambda: execute_tool(_block.name, _block.input)
-                            )
-                            yield f"data: {json.dumps({'type': 'status', 'content': '✅ 数据获取完成，正在生成分析...'})}\n\n"
-                        except Exception as tool_err:
-                            result_str = f"错误：{str(tool_err)}"
-                            yield f"data: {json.dumps({'type': 'status', 'content': f'❌ 查询失败：{str(tool_err)}'})}\n\n"
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result_str,
-                        })
-                messages.append({"role": "user", "content": tool_results})
-
-            else:
-                text = ""
-                for block in response.content:
-                    if block.type == "text":
-                        text += block.text
-                messages.append({"role": "assistant", "content": text})
-                words = text.split(" ")
-                for i, word in enumerate(words):
-                    chunk = word + (" " if i < len(words) - 1 else "")
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-                    await asyncio.sleep(0.018)
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
-                break
-
+        async for event in _runner.run(messages, SYSTEM_PROMPT, TOOLS):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
     except Exception as e:
         err_msg = str(e)
         if "authentication" in err_msg.lower() or "401" in err_msg:
@@ -434,57 +410,8 @@ async def gap_analysis_stream(score_data: dict):
     messages = [{"role": "user", "content": user_msg}]
 
     try:
-        while True:
-            response = await client.messages.create(
-                model=cfg["model"],
-                max_tokens=4096,
-                system=GAP_ANALYSIS_SYSTEM_PROMPT,
-                tools=TOOLS,
-                messages=messages,
-            )
-
-            if response.stop_reason == "tool_use":
-                messages.append({"role": "assistant", "content": response.content})
-                tool_results = []
-                for block in response.content:
-                    if block.type == "text" and block.text.strip():
-                        yield f"data: {json.dumps({'type': 'token', 'content': block.text})}\n\n"
-                    elif block.type == "tool_use":
-                        status_map = {
-                            "search_policies":   "📜 正在搜索相关政策…",
-                            "get_policy_detail": "📋 正在获取政策详情…",
-                        }
-                        status_msg = status_map.get(block.name, f"🔧 正在调用工具 {block.name}…")
-                        yield f"data: {json.dumps({'type': 'status', 'content': status_msg})}\n\n"
-                        loop = asyncio.get_event_loop()
-                        _block = block
-                        try:
-                            result_str = await loop.run_in_executor(
-                                None, lambda: execute_tool(_block.name, _block.input)
-                            )
-                            yield f"data: {json.dumps({'type': 'status', 'content': '✅ 政策数据加载完成，正在生成路线图…'})}\n\n"
-                        except Exception as tool_err:
-                            result_str = f"错误：{str(tool_err)}"
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result_str,
-                        })
-                messages.append({"role": "user", "content": tool_results})
-
-            else:
-                text = ""
-                for block in response.content:
-                    if block.type == "text":
-                        text += block.text
-                words = text.split(" ")
-                for i, word in enumerate(words):
-                    chunk = word + (" " if i < len(words) - 1 else "")
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-                    await asyncio.sleep(0.015)
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
-                break
-
+        async for event in _runner.run(messages, GAP_ANALYSIS_SYSTEM_PROMPT, TOOLS):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
     except Exception as e:
         err_msg = str(e)
         if "authentication" in err_msg.lower() or "401" in err_msg:
