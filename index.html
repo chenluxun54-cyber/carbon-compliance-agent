@@ -403,6 +403,11 @@
     }
     .status-msg .spinner { width: 14px; height: 14px; border-width: 1.5px; }
 
+    .history-divider {
+      text-align: center; font-size: 11px; color: #9ca3af;
+      padding: 4px 0; user-select: none; letter-spacing: .5px;
+    }
+
     .report-download-banner {
       display: flex; align-items: center; gap: 12px; justify-content: center;
       margin: 12px 0; padding: 10px 16px;
@@ -1124,9 +1129,42 @@ function renderHistory(data) {
 
 // ── Chat ─────────────────────────────────────────────────────────────
 async function initChatSession() {
-  const res = await fetch(`${API}/new_session`, { method: 'POST' });
-  const d   = await res.json();
+  const storedSid = localStorage.getItem('carbon_session_id');
+  const res = await fetch(`${API}/new_session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: storedSid ? JSON.stringify({ session_id: storedSid }) : '{}',
+  });
+  const d = await res.json();
   sessionId = d.session_id;
+  localStorage.setItem('carbon_session_id', sessionId);
+  if (d.restored && d.message_count > 0) {
+    await restoreChatHistory();
+  }
+}
+
+async function restoreChatHistory() {
+  try {
+    const res = await fetch(`${API}/session/${sessionId}/history`);
+    const history = await res.json();
+    if (!history.length) return;
+    removeEmpty('chat-empty');
+    const divider = document.createElement('div');
+    divider.className = 'history-divider';
+    divider.textContent = `─── 已恢复 ${history.length} 条历史记录 ───`;
+    document.getElementById('chat-messages').appendChild(divider);
+    for (const msg of history) {
+      if (msg.role === 'user') {
+        appendUserMsg(msg.text);
+      } else {
+        const el = createAssistBubble();
+        el.innerHTML = marked.parse(msg.text);
+      }
+    }
+    chatScrollDown();
+  } catch (e) {
+    console.warn('Failed to restore chat history:', e);
+  }
 }
 
 function injectChatContext(d) {

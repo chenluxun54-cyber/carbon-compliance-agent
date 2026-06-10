@@ -32,6 +32,11 @@ from calculator import (
     calc_transport, calc_packaging, calc_end_of_life, summarize_footprint,
 )
 from report_template import generate_report_html
+from persistence import (
+    ensure_db, session_exists, create_session,
+    save_messages, load_api_messages, load_display_history,
+)
+ensure_db()
 
 # ── Provider 配置 ─────────────────────────────────────────────────
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
@@ -371,6 +376,8 @@ _sub_agent_pending: dict[str, dict] = {}
 calc_results: dict[str, dict] = {}
 # Active session_id being processed by the calc sub-agent (for result storage)
 _active_calc_session: dict[str, str] = {"current": ""}
+# Tracks how many messages have already been persisted per session
+_session_saved_idx: dict[str, int] = {}
 
 
 def execute_carbon_score(company_id: str, report_year: int) -> str:
@@ -494,6 +501,18 @@ async def _run_calc_sub_agent(session_id: str, product_hint: str):
     # else: paused for ask_client — stay in calc mode for next user message
 
 
+async def _persist(session_id: str) -> None:
+    """Save any new messages in this session to the DB."""
+    msgs = sessions.get(session_id, [])
+    from_idx = _session_saved_idx.get(session_id, 0)
+    if len(msgs) > from_idx:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, lambda: save_messages(session_id, msgs, from_idx)
+        )
+        _session_saved_idx[session_id] = len(msgs)
+
+
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
 async def agent_stream(session_id: str, user_message: str):
     if not cfg["api_key"]:
@@ -514,7 +533,6 @@ async def agent_stream(session_id: str, user_message: str):
             async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             _active_calc_session["current"] = ""
-            # If finalize_footprint was called, emit download event and exit calc mode
             if session_id in calc_results:
                 yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
                 session_states.pop(session_id, None)
@@ -524,17 +542,17 @@ async def agent_stream(session_id: str, user_message: str):
             if "authentication" in err_msg.lower() or "401" in err_msg:
                 err_msg = "API Key 无效，请检查环境变量后重启服务。"
             yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
+        finally:
+            await _persist(session_id)
         return
 
     messages.append({"role": "user", "content": user_message})
 
     try:
         sub_agent_triggered = False
+        hint = ""
         async for event in _runner.run(messages, SYSTEM_PROMPT, TOOLS):
-            # Detect sub-agent sentinel hidden inside a status event
-            # (the runner already executed start_product_calc and got the sentinel JSON back)
             if not sub_agent_triggered:
-                # Check if the last tool result in messages is a sub-agent sentinel
                 last_user = next(
                     (m for m in reversed(messages) if m.get("role") == "user" and isinstance(m.get("content"), list)),
                     None,
@@ -551,10 +569,8 @@ async def agent_stream(session_id: str, user_message: str):
                                     break
                             except (json.JSONDecodeError, TypeError):
                                 pass
-
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-        # After main agent loop, start sub-agent if triggered
         if sub_agent_triggered:
             yield f"data: {json.dumps({'type': 'status', 'content': '🧮 启动产品碳足迹计算...'})}\n\n"
             async for event in _run_calc_sub_agent(session_id, hint):
@@ -565,6 +581,8 @@ async def agent_stream(session_id: str, user_message: str):
         if "authentication" in err_msg.lower() or "401" in err_msg:
             err_msg = "API Key 无效，请检查环境变量后重启服务。"
         yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
+    finally:
+        await _persist(session_id)
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────────
@@ -599,10 +617,25 @@ async def chat(request: Request):
 
 
 @app.post("/new_session")
-async def new_session():
+async def new_session(request: Request):
+    try:
+        body = await request.json()
+        existing_sid = body.get("session_id", "")
+    except Exception:
+        existing_sid = ""
+
+    loop = asyncio.get_event_loop()
+    if existing_sid and await loop.run_in_executor(None, lambda: session_exists(existing_sid)):
+        msgs = await loop.run_in_executor(None, lambda: load_api_messages(existing_sid))
+        sessions[existing_sid] = msgs
+        _session_saved_idx[existing_sid] = len(msgs)
+        return {"session_id": existing_sid, "restored": True, "message_count": len(msgs)}
+
     sid = str(uuid.uuid4())
     sessions[sid] = []
-    return {"session_id": sid}
+    _session_saved_idx[sid] = 0
+    await loop.run_in_executor(None, lambda: create_session(sid))
+    return {"session_id": sid, "restored": False}
 
 
 @app.get("/provider")
@@ -674,6 +707,13 @@ async def get_policy(policy_id: str):
         None, lambda: execute_get_policy_detail(policy_id)
     )
     return json.loads(result)
+
+
+@app.get("/session/{session_id}/history")
+async def get_session_history(session_id: str):
+    loop = asyncio.get_event_loop()
+    history = await loop.run_in_executor(None, lambda: load_display_history(session_id))
+    return history
 
 
 @app.get("/footprint-report/{session_id}")
