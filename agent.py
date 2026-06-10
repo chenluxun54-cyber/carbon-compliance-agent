@@ -29,8 +29,9 @@ from scorer import CarbonScorer
 from policies import POLICIES
 from calculator import (
     calc_scope2, calc_upstream_materials, calc_scope1_fuel,
-    calc_transport, summarize_footprint,
+    calc_transport, calc_packaging, calc_end_of_life, summarize_footprint,
 )
+from report_template import generate_report_html
 
 # ── Provider 配置 ─────────────────────────────────────────────────
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
@@ -267,7 +268,7 @@ CALC_SYSTEM_PROMPT = """你是一位专业的产品碳足迹计算顾问，帮�
 第4步：主要原材料
 → ask_client："产品主要用了哪些材料？各用多少千克？"
   （原因：原材料通常占产品碳足迹的 50-80%）
-  可识别材料：钢铁、铝、铜、塑料（PP/PE/ABS）、玻璃、纸板、木材、PCB电路板、锂电池、橡胶、陶瓷
+  可识别材料：钢铁、铝（含再生铝）、铜、锌、镍、塑料（PP/PE/ABS/PET/PC/PVC/PA/PU）、玻璃、纸板、木材、PCB电路板、锂电池、碳纤维、玻璃纤维、橡胶、陶瓷、涤纶、羊毛、皮革等45种
 
 第5步（可选）：直接燃料
 → ask_client："生产过程中有用到天然气、柴油或煤炭吗？"
@@ -277,7 +278,18 @@ CALC_SYSTEM_PROMPT = """你是一位专业的产品碳足迹计算顾问，帮�
 → ask_client："产品通常运多远交给客户？用什么运输方式（公路/铁路/海运）？"
   无或不确定则跳过（传0）
 
-第7步：调用 finalize_footprint
+第7步（可选）：外包装
+→ ask_client："产品出售时有外包装吗？包装材料是什么，大概多重（克）？"
+  （原因：包装材料的生产也会产生碳排放，通常占总量 3-8%）
+  可识别包装材料：瓦楞纸箱、PE薄膜、泡沫塑料、铝箔、玻璃瓶、铁罐
+  无包装则跳过（传空数组）
+
+第8步（可选）：产品报废处置
+→ ask_client："这款产品报废后，通常怎么处理？主要是填埋、焚烧还是回收？"
+  （原因：报废处置方式影响全生命周期总排放，回收可产生减排效益）
+  不确定则跳过
+
+第9步：调用 finalize_footprint
 → 收集完以上数据后立即调用 finalize_footprint，传入所有参数
 
 【处理用户已提供信息的情况】
@@ -318,6 +330,26 @@ CALC_TOOLS = [
                 "transport_weight_kg": {"type": "number", "description": "产品重量（kg）"},
                 "transport_distance_km": {"type": "number", "description": "运输距离（km）；无则传0"},
                 "transport_mode": {"type": "string", "description": "运输方式：公路/铁路/海运/航空"},
+                "packaging": {
+                    "type": "array",
+                    "description": "包装材料列表，无包装传空数组",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "kg": {"type": "number"}
+                        },
+                        "required": ["name", "kg"]
+                    }
+                },
+                "end_of_life_method": {
+                    "type": "string",
+                    "description": "报废处置方式：填埋/焚烧/回收/混合/堆肥；不确定传空字符串"
+                },
+                "end_of_life_recycled_pct": {
+                    "type": "number",
+                    "description": "回收比例（0-100），处置方式为混合时使用"
+                },
                 "assumptions": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -335,6 +367,10 @@ sessions: dict[str, list] = {}
 session_states: dict[str, str] = {}  # session_id → "main" | "calc"
 # Signals from execute_tool to agent_stream that sub-agent should start
 _sub_agent_pending: dict[str, dict] = {}
+# Stores the last finalize_footprint result per session (for report download)
+calc_results: dict[str, dict] = {}
+# Active session_id being processed by the calc sub-agent (for result storage)
+_active_calc_session: dict[str, str] = {"current": ""}
 
 
 def execute_carbon_score(company_id: str, report_year: int) -> str:
@@ -378,10 +414,18 @@ def execute_finalize_footprint(inputs: dict) -> str:
         inputs["region"],
     )
     materials = calc_upstream_materials(inputs.get("materials", []))
+    packaging = calc_packaging(inputs.get("packaging", []))
     transport = calc_transport(
         float(inputs.get("transport_weight_kg", 0)),
         float(inputs.get("transport_distance_km", 0)),
         inputs.get("transport_mode", "公路"),
+    )
+    total_weight = sum(m.get("kg", 0) for m in inputs.get("materials", []))
+    total_weight += sum(p.get("kg", 0) for p in inputs.get("packaging", []))
+    end_of_life = calc_end_of_life(
+        weight_kg=total_weight,
+        disposal_method=inputs.get("end_of_life_method", ""),
+        recycled_pct=float(inputs.get("end_of_life_recycled_pct", 0)),
     )
     result = summarize_footprint(
         product_name=inputs["product_name"],
@@ -390,8 +434,14 @@ def execute_finalize_footprint(inputs: dict) -> str:
         scope2=scope2,
         materials=materials,
         transport=transport,
+        packaging=packaging,
+        end_of_life=end_of_life,
         assumptions=inputs.get("assumptions", []),
     )
+    # Store result for report download, keyed by active session
+    sid = _active_calc_session.get("current", "")
+    if sid:
+        calc_results[sid] = result
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
@@ -421,18 +471,27 @@ _calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execu
 
 async def _run_calc_sub_agent(session_id: str, product_hint: str):
     """Run the product carbon footprint sub-agent on the session."""
+    _active_calc_session["current"] = session_id
     messages = sessions[session_id]
-    # Inject product hint as the opening context for the sub-agent
     if product_hint:
         messages.append({"role": "user", "content": product_hint})
     else:
         messages.append({"role": "user", "content": "请开始收集产品碳足迹计算所需的信息。"})
+
+    calc_done = False
     async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
         yield event
-    # Sub-agent finished (either ask_client pause or finalize_footprint done)
-    # Reset state so next user message goes back to main agent
-    if session_states.get(session_id) == "calc":
+        # Detect if finalize_footprint was called (result stored in calc_results)
+        if not calc_done and session_id in calc_results:
+            calc_done = True
+
+    _active_calc_session["current"] = ""
+
+    # If calc completed (not just paused for ask_client), yield the download event
+    if calc_done and session_id in calc_results:
+        yield {"type": "calc_complete", "session_id": session_id}
         session_states.pop(session_id, None)
+    # else: paused for ask_client — stay in calc mode for next user message
 
 
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
@@ -451,21 +510,16 @@ async def agent_stream(session_id: str, user_message: str):
     if session_states.get(session_id) == "calc":
         messages.append({"role": "user", "content": user_message})
         try:
+            _active_calc_session["current"] = session_id
             async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-            # After sub-agent finishes its turn, check if it's done
-            # (ask_client pauses → stays in calc mode; finalize_footprint end_turn → exit calc mode)
-            last_assistant = next(
-                (m for m in reversed(messages) if m.get("role") == "assistant"),
-                None,
-            )
-            if last_assistant:
-                content = last_assistant.get("content", "")
-                text = content if isinstance(content, str) else ""
-                # If the last assistant turn produced a final answer (not ask_client), exit calc mode
-                if text and session_states.get(session_id) == "calc":
-                    session_states.pop(session_id, None)
+            _active_calc_session["current"] = ""
+            # If finalize_footprint was called, emit download event and exit calc mode
+            if session_id in calc_results:
+                yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
+                session_states.pop(session_id, None)
         except Exception as e:
+            _active_calc_session["current"] = ""
             err_msg = str(e)
             if "authentication" in err_msg.lower() or "401" in err_msg:
                 err_msg = "API Key 无效，请检查环境变量后重启服务。"
@@ -620,6 +674,18 @@ async def get_policy(policy_id: str):
         None, lambda: execute_get_policy_detail(policy_id)
     )
     return json.loads(result)
+
+
+@app.get("/footprint-report/{session_id}")
+async def footprint_report(session_id: str):
+    result = calc_results.get(session_id)
+    if not result:
+        return {"error": "未找到计算结果，请先完成碳足迹计算"}
+    html = generate_report_html(result)
+    return HTMLResponse(
+        content=html,
+        headers={"Content-Disposition": "attachment; filename=carbon_footprint_report.html"},
+    )
 
 
 # ── Gap Analysis Stream ──────────────────────────────────────────

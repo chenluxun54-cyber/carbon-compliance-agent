@@ -403,6 +403,19 @@
     }
     .status-msg .spinner { width: 14px; height: 14px; border-width: 1.5px; }
 
+    .report-download-banner {
+      display: flex; align-items: center; gap: 12px; justify-content: center;
+      margin: 12px 0; padding: 10px 16px;
+      background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px;
+      font-size: 13px; color: #166534;
+    }
+    .report-download-banner button {
+      background: var(--green); color: #fff; border: none; border-radius: 7px;
+      padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+      white-space: nowrap;
+    }
+    .report-download-banner button:hover { background: var(--green-dark); }
+
     .cursor-blink {
       display: inline-block; width: 2px; height: 1em;
       background: var(--green); vertical-align: text-bottom;
@@ -1207,6 +1220,14 @@ function handleSSE(payload, showUser) {
     case 'done':
       curAssistEl.innerHTML = marked.parse(curContent);
       document.querySelectorAll('.status-msg').forEach(e => e.remove());
+      chatScrollDown();
+      break;
+    case 'calc_complete':
+      document.querySelectorAll('.report-download-banner').forEach(e => e.remove());
+      const banner = document.createElement('div');
+      banner.className = 'report-download-banner';
+      banner.innerHTML = `<span>📄 计算完成，可下载完整方法论报告</span><button onclick="window.open('/footprint-report/${payload.session_id}')">下载方法论报告</button>`;
+      document.getElementById('chat-messages').appendChild(banner);
       chatScrollDown();
       break;
   }
