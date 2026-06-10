@@ -12,10 +12,12 @@ from typing import AsyncGenerator, Callable
 
 
 _STATUS_MSGS: dict[str, str] = {
-    "carbon_score":      "🔍 正在查询企业碳评分数据…",
-    "search_policies":   "📜 正在搜索政策库…",
-    "get_policy_detail": "📋 正在获取政策详情…",
-    "ask_client":        "❓ 需要向客户确认信息…",
+    "carbon_score":        "🔍 正在查询企业碳评分数据…",
+    "search_policies":     "📜 正在搜索政策库…",
+    "get_policy_detail":   "📋 正在获取政策详情…",
+    "ask_client":          "❓ 需要向客户确认信息…",
+    "start_product_calc":  "🧮 正在启动产品碳足迹计算…",
+    "finalize_footprint":  "⚙️ 正在计算碳排放量…",
 }
 
 
