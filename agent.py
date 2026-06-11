@@ -35,7 +35,7 @@ from report_template import generate_report_html
 from persistence import (
     ensure_db, session_exists, create_session,
     save_messages, load_api_messages, load_display_history,
-    get_session_name, update_session_name, list_sessions,
+    get_session_name, update_session_name, list_sessions, delete_session,
 )
 ensure_db()
 
@@ -794,6 +794,18 @@ async def get_sessions_list(limit: int = 50):
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, lambda: list_sessions(limit))
     return data
+
+
+@app.delete("/session/{session_id}")
+async def delete_session_endpoint(session_id: str):
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: delete_session(session_id))
+    # Clean up in-memory state
+    sessions.pop(session_id, None)
+    session_states.pop(session_id, None)
+    calc_results.pop(session_id, None)
+    _session_saved_idx.pop(session_id, None)
+    return {"deleted": session_id}
 
 
 @app.patch("/session/{session_id}/name")

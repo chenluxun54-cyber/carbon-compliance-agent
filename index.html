@@ -368,7 +368,7 @@
     .session-item {
       padding: 8px 10px; border-radius: 8px; cursor: pointer;
       display: flex; flex-direction: column; gap: 3px;
-      transition: background .15s;
+      transition: background .15s; position: relative;
     }
     .session-item:hover { background: #f3f4f6; }
     .session-item.active { background: var(--green-light); }
@@ -386,6 +386,15 @@
       font-size: 11px; color: var(--text-muted);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .session-item-delete {
+      display: none; position: absolute; top: 6px; right: 6px;
+      width: 18px; height: 18px; border-radius: 4px;
+      background: transparent; border: none; cursor: pointer;
+      font-size: 13px; line-height: 18px; text-align: center;
+      color: var(--text-muted); padding: 0;
+    }
+    .session-item:hover .session-item-delete { display: block; }
+    .session-item-delete:hover { background: #fee2e2; color: #dc2626; }
 
     /* ── Chat main (right side of session panel) ───────────────── */
     #chat-main {
@@ -1253,6 +1262,8 @@ async function loadSessionList() {
                ondblclick="startRename(event,'${sid}')">${name}</div>
           <div class="session-item-time">${timeStr}</div>
           ${preview ? `<div class="session-item-preview">${preview}</div>` : ''}
+          <button class="session-item-delete"
+                  onclick="deleteSession(event,'${sid}')" title="删除对话">×</button>
         </div>`;
     }).join('');
   } catch (e) {
@@ -1350,6 +1361,17 @@ async function renameSession(sid, name) {
       body: JSON.stringify({name}),
     });
   } catch (e) { console.warn('renameSession failed:', e); }
+}
+
+async function deleteSession(event, sid) {
+  event.stopPropagation();
+  if (!confirm('删除这条对话记录？此操作不可撤销。')) return;
+  try {
+    await fetch(`${API}/session/${sid}`, {method: 'DELETE'});
+    // If deleting the active session, create a fresh one
+    if (sid === sessionId) await createNewSession();
+    else await loadSessionList();
+  } catch (e) { console.warn('deleteSession failed:', e); }
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────

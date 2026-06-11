@@ -113,6 +113,13 @@ def load_display_history(sid: str) -> list:
     return history
 
 
+def delete_session(sid: str) -> None:
+    """Delete a session and all its messages."""
+    with _connect() as conn:
+        conn.execute("DELETE FROM messages WHERE session_id = ?", (sid,))
+        conn.execute("DELETE FROM sessions WHERE session_id = ?", (sid,))
+
+
 def get_session_name(sid: str) -> str | None:
     with _connect() as conn:
         row = conn.execute(
