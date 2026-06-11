@@ -23,6 +23,9 @@ _STATUS_MSGS: dict[str, str] = {
     "finalize_footprint":  "⚙️ 正在计算碳排放量…",
 }
 
+# Only show "数据获取完成" when real user-data is retrieved or calculated
+_DATA_TOOLS = {"carbon_score", "finalize_footprint"}
+
 
 class AgentRunner:
     def __init__(
@@ -131,7 +134,8 @@ class AgentRunner:
                                     None,
                                     lambda: self.execute_tool(_block.name, _block.input),
                                 )
-                                yield {"type": "status", "content": "✅ 数据获取完成，正在生成分析…"}
+                                if _block.name in _DATA_TOOLS:
+                                    yield {"type": "status", "content": "✅ 数据获取完成，正在生成分析…"}
                             except Exception as err:
                                 result_str = f"错误：{err}"
                                 yield {"type": "status", "content": f"❌ 查询失败：{err}"}
