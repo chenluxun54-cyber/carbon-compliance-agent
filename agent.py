@@ -820,17 +820,48 @@ app.add_middleware(
 
 
 async def _with_keepalive(gen, interval: int = 8):
-    """Wrap an SSE generator; inject ': keepalive' comments when silent > interval seconds."""
+    """
+    Wrap an SSE generator with keepalive pings.
+
+    Runs the generator in a separate task so it is NEVER cancelled mid-await
+    (asyncio.wait_for cancels the underlying coroutine, which corrupts async
+    generators that contain awaitable operations like client.messages.create).
+    Instead, a heartbeat task independently enqueues pings every `interval` seconds.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def _drain():
+        try:
+            async for event in gen:
+                await queue.put(("data", event))
+        except Exception as exc:
+            await queue.put(("error", exc))
+        finally:
+            await queue.put(("done", None))
+
+    async def _heartbeat():
+        while True:
+            await asyncio.sleep(interval)
+            await queue.put(("ping", None))
+
+    drain_task = asyncio.create_task(_drain())
+    ping_task  = asyncio.create_task(_heartbeat())
     try:
         while True:
-            try:
-                data = await asyncio.wait_for(gen.__anext__(), timeout=interval)
-                yield data
-            except asyncio.TimeoutError:
+            kind, value = await queue.get()
+            if kind == "data":
+                yield value
+            elif kind == "ping":
                 yield ": keepalive\n\n"
-            except StopAsyncIteration:
+            elif kind == "error":
+                yield f"data: {json.dumps({'type': 'error', 'content': str(value)}, ensure_ascii=False)}\n\n"
+                break
+            else:  # "done"
                 break
     finally:
+        ping_task.cancel()
+        drain_task.cancel()
+        await asyncio.gather(drain_task, ping_task, return_exceptions=True)
         await gen.aclose()
 
 
