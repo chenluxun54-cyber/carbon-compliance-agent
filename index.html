@@ -969,7 +969,8 @@ let curContent  = '';
 // ── Init ────────────────────────────────────────────────────────────
 async function init() {
   await loadCompanies();
-  await Promise.all([initChatSession(), initPolicyChatSession()]);
+  initPolicyChatSession();
+  await initChatSession();
   loadSessionList(); // non-blocking
   loadPolicies();    // non-blocking
 }
@@ -1441,15 +1442,15 @@ async function deleteSession(event, sid) {
 
 // ── Chat ─────────────────────────────────────────────────────────────
 async function initChatSession() {
-  // Always restore the most recent session that has messages;
-  // fall back to localStorage sid, then create new only if truly nothing exists.
-  let targetSid = localStorage.getItem('carbon_session_id');
+  // Restore the most recently active session; only create new if none exist at all.
+  let targetSid = null;
   try {
-    const listRes  = await fetch(`${API}/sessions`);
-    const list     = await listRes.json();
-    const withMsgs = list.find(s => s.preview); // first (most recent) with a preview
-    if (withMsgs) targetSid = withMsgs.session_id;
-  } catch (_) { /* fall through to stored/new */ }
+    const listRes = await fetch(`${API}/sessions`);
+    const list    = await listRes.json();
+    // list is ordered by last_active DESC — take the first real session
+    if (list.length > 0) targetSid = list[0].session_id;
+  } catch (_) { /* fall through */ }
+  if (!targetSid) targetSid = localStorage.getItem('carbon_session_id');
 
   const res = await fetch(`${API}/new_session`, {
     method: 'POST',
@@ -1695,10 +1696,9 @@ let pCurContent     = '';
 const BADGE_CLASS = { '全球': 'badge-global', '欧盟': 'badge-eu', '中国': 'badge-cn' };
 const INDUSTRY_ICONS = { '科技': '💻', '金融': '🏦', '制造业': '🏭', '钢铁': '⚙️', '电力': '⚡', '化工': '🧪', '水泥': '🏗️', '铝': '🔩', '食品': '🌾', '房地产': '🏢', '半导体': '🔬', '消费品': '🛒', '航空': '✈️' };
 
-async function initPolicyChatSession() {
-  const res = await fetch(`${API}/new_session`, { method: 'POST' });
-  const d   = await res.json();
-  policySessionId = d.session_id;
+function initPolicyChatSession() {
+  // Generate a client-side UUID — no DB session needed for ephemeral policy chat
+  policySessionId = 'policy-' + crypto.randomUUID();
 }
 
 async function loadPolicies() {
