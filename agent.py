@@ -786,12 +786,12 @@ async def agent_stream(session_id: str, user_message: str):
                         if isinstance(tr, dict) and tr.get("type") == "tool_result":
                             try:
                                 payload = json.loads(tr.get("content", "{}"))
-                                if payload.get("__sub_agent__") == "calc":
+                                if isinstance(payload, dict) and payload.get("__sub_agent__") == "calc":
                                     sub_agent_triggered = True
                                     hint = payload.get("product_hint", "")
                                     session_states[session_id] = "calc"
                                     break
-                            except (json.JSONDecodeError, TypeError):
+                            except (json.JSONDecodeError, TypeError, AttributeError):
                                 pass
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
