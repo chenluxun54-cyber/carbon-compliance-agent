@@ -19,6 +19,10 @@ def generate_report_html(result: dict) -> str:
     unknowns = result.get("unknowns", [])
     scope_summary = result.get("scope_summary", {})
     today = date.today().strftime("%Y年%m月%d日")
+    compliance = result.get("compliance", {})
+    cbam = compliance.get("cbam", {})
+    iso_checklist = compliance.get("iso14067_checklist", [])
+    iso_overall = compliance.get("iso14067_overall", "")
 
     # ── Breakdown table rows ──
     rows_html = ""
@@ -82,6 +86,65 @@ def generate_report_html(result: dict) -> str:
           <strong>⚠ 以下材料未能识别排放因子，已从计算中排除：</strong>
           {', '.join(unknowns)}
         </div>"""
+
+    # ── Section 6: ISO 14067 checklist ──────────────────────────────
+    _status_label = {"pass": "通过", "partial": "部分符合", "fail": "不符合"}
+    _status_style = {
+        "pass":    "background:#dcfce7;color:#14532d",
+        "partial": "background:#fef9c3;color:#92400e",
+        "fail":    "background:#fee2e2;color:#991b1b",
+    }
+    _overall_style = _status_style.get(iso_overall, "background:#f3f4f6;color:#6b7280")
+    _overall_label = _status_label.get(iso_overall, "—")
+
+    iso_rows_html = ""
+    for ci in iso_checklist:
+        st = ci.get("status", "")
+        badge = f'<span class="badge" style="{_status_style.get(st,"")};">{_status_label.get(st, st)}</span>'
+        iso_rows_html += f"""
+        <tr>
+          <td style="color:#9ca3af;font-size:12px;white-space:nowrap">{ci.get('clause','')}</td>
+          <td style="font-weight:500">{ci.get('requirement','')}</td>
+          <td>{badge}</td>
+          <td style="color:#6b7280;font-size:12px">{ci.get('note','')}</td>
+        </tr>"""
+
+    # ── Section 7: CBAM status ───────────────────────────────────────
+    cbam_section_html = ""
+    if cbam:
+        if cbam.get("covered"):
+            sectors = "、".join(cbam.get("matched_sectors", []))
+            cost = cbam.get("cost_eur_estimate", 0)
+            price = cbam.get("price_assumption_eur_per_tonne", 65)
+            cbam_section_html = f"""
+  <div class="section">
+    <h2>🇪🇺 CBAM 合规状态</h2>
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 18px;margin-bottom:14px">
+      <strong style="color:#c2410c">⚠ 产品涉及CBAM覆盖行业：{sectors}</strong><br>
+      <span style="color:#78350f;font-size:13px">出口至欧盟时，需申报产品嵌入碳排放量并购买相应CBAM证书。</span>
+    </div>
+    <table>
+      <tbody>
+        <tr><td style="width:160px;color:#6b7280">匹配原材料</td><td>{', '.join(cbam.get('matched_materials',[]))}</td></tr>
+        <tr><td style="color:#6b7280">覆盖行业</td><td>{sectors}</td></tr>
+        <tr><td style="color:#6b7280">估算CBAM证书费用</td>
+            <td><strong>€{cost:.2f}</strong> <span style="color:#9ca3af;font-size:12px">（假设EU ETS价格 €{price}/吨CO₂e）</span></td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:12px;color:#9ca3af;font-size:12px">
+      注：此估算基于产品总碳排放量，实际CBAM义务需按欧盟法规（EU 2023/956）以嵌入碳排放方法论核算，
+      建议在出口前咨询专业合规顾问并使用官方CBAM申报工具。
+    </p>
+  </div>"""
+        else:
+            cbam_section_html = f"""
+  <div class="section">
+    <h2>🇪🇺 CBAM 合规状态</h2>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px">
+      <strong style="color:#15803d">✅ 暂无CBAM合规义务</strong><br>
+      <span style="color:#166534;font-size:13px">{cbam.get('coverage_note','当前材料清单未涉及CBAM覆盖行业。')}</span>
+    </div>
+  </div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -213,11 +276,34 @@ def generate_report_html(result: dict) -> str:
     </table>
   </div>
 
+  <!-- Section 6: ISO 14067 Compliance Checklist -->
+  <div class="section">
+    <h2>📋 ISO 14067:2018 合规清单</h2>
+    <div style="margin-bottom:14px">
+      整体合规状态：
+      <span class="badge" style="{_overall_style}">{_overall_label}</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:160px">条款</th>
+          <th>合规要求</th>
+          <th style="width:90px">状态</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>{iso_rows_html}</tbody>
+    </table>
+  </div>
+
+  {cbam_section_html}
+
   <!-- Footer -->
   <div class="footer">
-    <p>本报告由 <strong>双碳合规 AI 平台</strong> 自动生成。报告中的排放因子数据来自公开数据库（Ecoinvent、IPCC、中国国家标准），
-    计算结果仅供参考。如需正式认证，请联系经认可的第三方核查机构（如 SGS、Bureau Veritas）。</p>
-    <p style="margin-top:8px">生成时间：{today} &nbsp;|&nbsp; 方法论版本：Phase 2 MVP</p>
+    <p>本报告由 <strong>双碳合规 AI 平台</strong> 自动生成，含 ISO 14067:2018 合规检查与 CBAM 合规评估。
+    报告中的排放因子数据来自公开数据库（Ecoinvent、IPCC、中国国家标准），计算结果仅供参考。
+    如需正式认证，请联系经认可的第三方核查机构。</p>
+    <p style="margin-top:8px">生成时间：{today} &nbsp;|&nbsp; 方法论版本：Phase 3 MVP</p>
   </div>
 
 </div>

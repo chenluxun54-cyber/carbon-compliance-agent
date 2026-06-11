@@ -421,6 +421,23 @@
     }
     .report-download-banner button:hover { background: var(--green-dark); }
 
+    .compliance-row {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin: 8px 0; padding: 10px 16px;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+      font-size: 13px;
+    }
+    .compliance-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    }
+    .cb-pass    { background: #dcfce7; color: #14532d; }
+    .cb-partial { background: #fef9c3; color: #92400e; }
+    .cb-fail    { background: #fee2e2; color: #991b1b; }
+    .cb-covered { background: #fde8d8; color: #9a3412; }
+    .cb-clear   { background: #f0fdf4; color: #166534; }
+    .cb-unknown { background: #f3f4f6; color: #6b7280; }
+
     .cursor-blink {
       display: inline-block; width: 2px; height: 1em;
       background: var(--green); vertical-align: text-bottom;
@@ -1260,14 +1277,45 @@ function handleSSE(payload, showUser) {
       document.querySelectorAll('.status-msg').forEach(e => e.remove());
       chatScrollDown();
       break;
-    case 'calc_complete':
-      document.querySelectorAll('.report-download-banner').forEach(e => e.remove());
+    case 'calc_complete': {
+      const sid = payload.session_id;
+      document.querySelectorAll('.report-download-banner, .compliance-row').forEach(e => e.remove());
+
+      // Compliance status row (populated by fetch below)
+      const compRow = document.createElement('div');
+      compRow.className = 'compliance-row';
+      compRow.innerHTML = '<span style="color:#9ca3af">🔍 加载合规状态...</span>';
+      document.getElementById('chat-messages').appendChild(compRow);
+
+      // Download banner
       const banner = document.createElement('div');
       banner.className = 'report-download-banner';
-      banner.innerHTML = `<span>📄 计算完成，可下载完整方法论报告</span><button onclick="window.open('/footprint-report/${payload.session_id}')">下载方法论报告</button>`;
+      banner.innerHTML = `<span>📄 计算完成，报告含 ISO 14067 合规检查 + CBAM 评估</span><button onclick="window.open('/footprint-report/${sid}')">下载合规报告</button>`;
       document.getElementById('chat-messages').appendChild(banner);
       chatScrollDown();
+
+      // Fetch compliance JSON and update the row
+      fetch(`/compliance-check/${sid}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) { compRow.innerHTML = '<span style="color:#9ca3af">合规信息不可用</span>'; return; }
+          const isoStatus = data.iso14067_overall || 'unknown';
+          const isoLabel = {pass:'通过', partial:'部分符合', fail:'不符合'}[isoStatus] || '—';
+          const isoClass = {pass:'cb-pass', partial:'cb-partial', fail:'cb-fail'}[isoStatus] || 'cb-unknown';
+          const cbam = data.cbam || {};
+          const cbamCovered = cbam.covered;
+          const cbamLabel = cbamCovered ? `CBAM 覆盖 | €${cbam.cost_eur_estimate}` : 'CBAM 不覆盖';
+          const cbamClass = cbamCovered ? 'cb-covered' : 'cb-clear';
+          compRow.innerHTML = `
+            <span style="font-weight:600;color:#374151">合规状态</span>
+            <span class="compliance-badge ${isoClass}">📋 ISO 14067: ${escHtml(isoLabel)}</span>
+            <span class="compliance-badge ${cbamClass}">🇪🇺 ${escHtml(cbamLabel)}</span>
+            <span style="color:#9ca3af;font-size:11px">报告中含完整清单</span>`;
+          chatScrollDown();
+        })
+        .catch(() => { compRow.innerHTML = '<span style="color:#9ca3af">合规信息暂不可用</span>'; });
       break;
+    }
   }
 }
 

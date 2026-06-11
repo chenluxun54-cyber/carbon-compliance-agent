@@ -8,6 +8,7 @@ from emission_factors import (
     GRID_FACTORS, MATERIAL_FACTORS, FUEL_FACTORS, TRANSPORT_FACTORS,
     EOL_FACTORS, EF_SOURCES, resolve_region, get_material_factor, get_packaging_factor,
 )
+from compliance import check_cbam, iso14067_checklist
 
 # Average passenger car CO2e intensity (IPCC AR6, kgCO2e/km)
 _CAR_KG_PER_KM = 0.221
@@ -156,6 +157,7 @@ def summarize_footprint(
     packaging: dict = None,
     end_of_life: dict = None,
     assumptions: list = None,
+    certification_standard: str = None,
 ) -> dict:
     s1 = scope1.get("value_kgco2e", 0.0)
     s2 = scope2.get("value_kgco2e", 0.0)
@@ -228,7 +230,7 @@ def summarize_footprint(
     if packaging:
         all_unknowns += packaging.get("unknowns", [])
 
-    return {
+    out = {
         "product_name": product_name,
         "functional_unit": functional_unit,
         "total_kgco2e": round(total, 3),
@@ -247,3 +249,20 @@ def summarize_footprint(
             "scope3_end_of_life": round(eol, 3),
         },
     }
+
+    # ── Compliance layer (MVP3) ──────────────────────────────────────
+    _mat_list = [{"name": b["name"], "kg": b["kg"]} for b in materials.get("breakdown", [])]
+    cbam_result = check_cbam(_mat_list, total)
+    checklist = iso14067_checklist(out)
+    overall = (
+        "fail" if any(i["status"] == "fail" for i in checklist) else
+        "partial" if any(i["status"] == "partial" for i in checklist) else
+        "pass"
+    )
+    out["compliance"] = {
+        "cbam": cbam_result,
+        "iso14067_checklist": checklist,
+        "iso14067_overall": overall,
+        "certification_standard_requested": certification_standard,
+    }
+    return out

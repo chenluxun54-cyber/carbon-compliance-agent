@@ -294,7 +294,13 @@ CALC_SYSTEM_PROMPT = """你是一位专业的产品碳足迹计算顾问，帮�
   （原因：报废处置方式影响全生命周期总排放，回收可产生减排效益）
   不确定则跳过
 
-第9步：调用 finalize_footprint
+第9步（可选）：询问认证需求
+→ 若用户提到出口欧盟、申请碳足迹认证，或产品含钢铁/铝等原材料，在调用 finalize_footprint 之前询问：
+  "您是否需要针对特定认证标准生成合规报告？（ISO 14067 / CBAM 欧盟碳边境税 / 暂不需要）"
+  根据回答将 "ISO 14067" 或 "CBAM" 传入 certification_standard 字段；不需要则传空字符串。
+  若用户未提及合规需求，跳过此步，传空字符串。
+
+第10步：调用 finalize_footprint
 → 收集完以上数据后立即调用 finalize_footprint，传入所有参数
 
 【处理用户已提供信息的情况】
@@ -359,6 +365,10 @@ CALC_TOOLS = [
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "本次计算中使用的假设或默认值（如有）"
+                },
+                "certification_standard": {
+                    "type": "string",
+                    "description": "目标认证标准（可选），如 'ISO 14067'、'CBAM'；不需要则传空字符串"
                 }
             },
             "required": ["product_name", "functional_unit", "electricity_kwh", "region", "materials"]
@@ -444,6 +454,7 @@ def execute_finalize_footprint(inputs: dict) -> str:
         packaging=packaging,
         end_of_life=end_of_life,
         assumptions=inputs.get("assumptions", []),
+        certification_standard=inputs.get("certification_standard") or None,
     )
     # Store result for report download, keyed by active session
     sid = _active_calc_session.get("current", "")
@@ -726,6 +737,22 @@ async def footprint_report(session_id: str):
         content=html,
         headers={"Content-Disposition": "attachment; filename=carbon_footprint_report.html"},
     )
+
+
+@app.get("/compliance-check/{session_id}")
+async def compliance_check(session_id: str):
+    result = calc_results.get(session_id)
+    if not result:
+        return {"error": "未找到计算结果，请先完成碳足迹计算"}
+    compliance = result.get("compliance", {})
+    return {
+        "session_id": session_id,
+        "product_name": result.get("product_name"),
+        "total_kgco2e": result.get("total_kgco2e"),
+        "iso14067_overall": compliance.get("iso14067_overall"),
+        "iso14067_checklist": compliance.get("iso14067_checklist", []),
+        "cbam": compliance.get("cbam", {}),
+    }
 
 
 # ── Gap Analysis Stream ──────────────────────────────────────────
