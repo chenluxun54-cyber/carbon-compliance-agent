@@ -38,10 +38,28 @@ def ensure_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_messages_session
                 ON messages(session_id, id);
         """)
-        # Migration: add 'name' column if absent (existing DBs)
+        # Migration: add 'name' column if absent
         cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
         if "name" not in cols:
             conn.execute("ALTER TABLE sessions ADD COLUMN name TEXT DEFAULT NULL")
+
+        # Memories table (new in memory system)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS memories (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_type       TEXT NOT NULL,
+                content           TEXT NOT NULL,
+                source_session_id TEXT,
+                created_at        TEXT NOT NULL,
+                importance        INTEGER DEFAULT 1
+            );
+            CREATE INDEX IF NOT EXISTS idx_memories_type
+                ON memories(memory_type, importance DESC, id DESC);
+        """)
+        # Migration: add 'summarized' column to sessions
+        cols2 = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+        if "summarized" not in cols2:
+            conn.execute("ALTER TABLE sessions ADD COLUMN summarized INTEGER DEFAULT 0")
 
 
 def session_exists(sid: str) -> bool:
@@ -172,3 +190,44 @@ def list_sessions(limit: int = 50) -> list:
             "preview":     preview,
         })
     return result
+
+
+# ── Memory system ─────────────────────────────────────────────────────
+
+def add_memory(
+    memory_type: str,
+    content: str,
+    source_session_id: str | None = None,
+    importance: int = 1,
+) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO memories(memory_type, content, source_session_id, created_at, importance)"
+            " VALUES(?,?,?,?,?)",
+            (memory_type, content, source_session_id, now, importance),
+        )
+        return cur.lastrowid
+
+
+def get_memories(limit: int = 40) -> list:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, memory_type, content, source_session_id, created_at, importance"
+            " FROM memories ORDER BY importance DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_session_summarized(sid: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE sessions SET summarized=1 WHERE session_id=?", (sid,))
+
+
+def is_session_summarized(sid: str) -> bool:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT summarized FROM sessions WHERE session_id=?", (sid,)
+        ).fetchone()
+    return bool(row and row["summarized"])

@@ -36,6 +36,7 @@ from persistence import (
     ensure_db, session_exists, create_session,
     save_messages, load_api_messages, load_display_history,
     get_session_name, update_session_name, list_sessions, delete_session,
+    add_memory, get_memories, mark_session_summarized, is_session_summarized,
 )
 ensure_db()
 
@@ -71,6 +72,54 @@ _AUTO_NAME_SYSTEM = (
     "你是一个对话命名助手。根据用户的第一条消息，用不超过10个汉字为这段对话起一个简洁的名称。"
     "只输出名称本身，不加标点，不加引号，不加任何解释。"
 )
+
+_MEMORY_EXTRACT_SYSTEM = """\
+你是一个对话记忆提取助手。请仔细阅读以下用户与AI顾问的对话记录，提取有价值的持久化记忆。
+
+输出严格遵守以下 JSON 格式，不得包含任何额外文字：
+{
+  "user_profile": ["<事实1>", "<事实2>"],
+  "qa_pattern":   ["<问答模式1>"],
+  "preference":   ["<偏好1>"],
+  "summary":      "<本次对话的100字以内摘要>"
+}
+
+提取规则：
+- user_profile：用户透露的身份信息（行业、公司、职位、产品、地区）；最多5条；无则空数组
+- qa_pattern：用户反复询问或获得有效回答的问题模式，如"用户关心CBAM对钢铁出口的影响"；最多4条；无则空数组
+- preference：用户明显的回答偏好（格式、简洁度、关注点）；最多3条；无则空数组
+- summary：整段对话核心主题与结论，100字以内，供未来对话参考
+
+重要：只提取对话中真实出现的信息，不推断或捏造；输出必须是合法JSON，不加代码块标记。\
+"""
+
+
+def _build_memory_context() -> str:
+    """Build a memory context block from the DB to prepend to the system prompt."""
+    try:
+        rows = get_memories(limit=40)
+        if not rows:
+            return ""
+        profiles  = [r["content"] for r in rows if r["memory_type"] == "user_profile"]
+        prefs     = [r["content"] for r in rows if r["memory_type"] == "preference"]
+        patterns  = [r["content"] for r in rows if r["memory_type"] == "qa_pattern"]
+        summaries = [r["content"] for r in rows if r["memory_type"] == "conversation_summary"][:3]
+
+        parts = ["【长期记忆】"]
+        if profiles:
+            parts.append("• 用户画像：" + "；".join(profiles[:5]))
+        if prefs:
+            parts.append("• 偏好与习惯：" + "；".join(prefs[:3]))
+        if patterns:
+            parts.append("• 常见问题模式：" + "；".join(patterns[:4]))
+        if summaries:
+            parts.append("• 近期对话摘要（最新3条）：\n  " + "\n  ".join(summaries))
+
+        result = "\n".join(parts)
+        return result[:1500] + ("…" if len(result) > 1500 else "")
+    except Exception:
+        return ""
+
 
 SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询顾问 Agent。
 
@@ -601,6 +650,85 @@ async def _maybe_auto_name(session_id: str) -> None:
         pass
 
 
+async def _extract_memories(session_id: str) -> None:
+    """Extract structured memories from a completed session via LLM. Fire-and-forget."""
+    try:
+        loop = asyncio.get_event_loop()
+        history = await loop.run_in_executor(None, lambda: load_display_history(session_id))
+
+        real_turns = [
+            t for t in history
+            if not t.get("text", "").strip().startswith("[系统上下文]")
+        ]
+        real_user_turns = [t for t in real_turns if t.get("role") == "user"]
+        if len(real_user_turns) < 4:
+            return
+
+        conversation_text = "\n".join(
+            f"{'用户' if t['role'] == 'user' else '助手'}: {t['text'][:400]}"
+            for t in real_turns
+        )
+        if len(conversation_text) > 4000:
+            conversation_text = conversation_text[:4000] + "\n[...已截断]"
+
+        response = await client.messages.create(
+            model=cfg["model"],
+            max_tokens=600,
+            system=_MEMORY_EXTRACT_SYSTEM,
+            messages=[{"role": "user", "content": conversation_text}],
+        )
+        raw = "".join(b.text for b in response.content if b.type == "text").strip()
+
+        # Strip accidental markdown fences
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+
+        data = json.loads(raw)
+
+        def _save():
+            for fact in (data.get("user_profile") or [])[:5]:
+                if isinstance(fact, str) and fact.strip():
+                    add_memory("user_profile", fact.strip(), session_id, importance=2)
+            for pattern in (data.get("qa_pattern") or [])[:4]:
+                if isinstance(pattern, str) and pattern.strip():
+                    add_memory("qa_pattern", pattern.strip(), session_id, importance=2)
+            for pref in (data.get("preference") or [])[:3]:
+                if isinstance(pref, str) and pref.strip():
+                    add_memory("preference", pref.strip(), session_id, importance=3)
+            summary = (data.get("summary") or "").strip()
+            if summary:
+                add_memory("conversation_summary", summary, session_id, importance=1)
+            mark_session_summarized(session_id)
+
+        await loop.run_in_executor(None, _save)
+    except Exception:
+        pass
+
+
+async def _maybe_extract_memories(session_id: str) -> None:
+    """Gate: only extract when ≥4 real user turns and session not yet summarized."""
+    try:
+        loop = asyncio.get_event_loop()
+        already = await loop.run_in_executor(None, lambda: is_session_summarized(session_id))
+        if already:
+            return
+        msgs = sessions.get(session_id, [])
+        real_user_count = sum(
+            1 for m in msgs
+            if m.get("role") == "user"
+            and isinstance(m.get("content"), str)
+            and not m["content"].strip().startswith("[系统上下文]")
+        )
+        if real_user_count < 4:
+            return
+        await _extract_memories(session_id)
+    except Exception:
+        pass
+
+
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
 async def agent_stream(session_id: str, user_message: str):
     if not cfg["api_key"]:
@@ -633,14 +761,18 @@ async def agent_stream(session_id: str, user_message: str):
         finally:
             await _persist(session_id)
             asyncio.create_task(_maybe_auto_name(session_id))
+            asyncio.create_task(_maybe_extract_memories(session_id))
         return
 
     messages.append({"role": "user", "content": user_message})
 
+    memory_ctx = _build_memory_context()
+    dynamic_prompt = SYSTEM_PROMPT + ("\n\n" + memory_ctx if memory_ctx else "")
+
     try:
         sub_agent_triggered = False
         hint = ""
-        async for event in _runner.run(messages, SYSTEM_PROMPT, TOOLS):
+        async for event in _runner.run(messages, dynamic_prompt, TOOLS):
             if not sub_agent_triggered:
                 last_user = next(
                     (m for m in reversed(messages) if m.get("role") == "user" and isinstance(m.get("content"), list)),
@@ -673,6 +805,7 @@ async def agent_stream(session_id: str, user_message: str):
     finally:
         await _persist(session_id)
         asyncio.create_task(_maybe_auto_name(session_id))
+        asyncio.create_task(_maybe_extract_memories(session_id))
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────────
