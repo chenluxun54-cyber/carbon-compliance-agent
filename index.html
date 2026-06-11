@@ -387,13 +387,13 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .session-item-delete {
-      display: none; position: absolute; top: 6px; right: 6px;
+      opacity: 0; position: absolute; top: 6px; right: 6px;
       width: 18px; height: 18px; border-radius: 4px;
       background: transparent; border: none; cursor: pointer;
-      font-size: 13px; line-height: 18px; text-align: center;
-      color: var(--text-muted); padding: 0;
+      font-size: 14px; line-height: 18px; text-align: center;
+      color: var(--text-muted); padding: 0; transition: opacity .15s;
     }
-    .session-item:hover .session-item-delete { display: block; }
+    .session-item:hover .session-item-delete { opacity: 1; }
     .session-item-delete:hover { background: #fee2e2; color: #dc2626; }
 
     /* ── Chat main (right side of session panel) ───────────────── */
@@ -1368,9 +1368,18 @@ async function deleteSession(event, sid) {
   if (!confirm('删除这条对话记录？此操作不可撤销。')) return;
   try {
     await fetch(`${API}/session/${sid}`, {method: 'DELETE'});
-    // If deleting the active session, create a fresh one
-    if (sid === sessionId) await createNewSession();
-    else await loadSessionList();
+    if (sid === sessionId) {
+      // Switch to another existing session; only create new if none remain
+      const res = await fetch(`${API}/sessions`);
+      const remaining = (await res.json()).filter(s => s.session_id !== sid);
+      if (remaining.length > 0) {
+        await selectSession(remaining[0].session_id);
+      } else {
+        await createNewSession();
+        return; // createNewSession already calls loadSessionList
+      }
+    }
+    await loadSessionList();
   } catch (e) { console.warn('deleteSession failed:', e); }
 }
 
