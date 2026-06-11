@@ -100,7 +100,11 @@ class AgentRunner:
                 return
 
             if final_message.stop_reason == "tool_use":
-                messages.append({"role": "assistant", "content": final_message.content})
+                # Convert SDK ContentBlock objects to plain dicts so json.dumps works
+                messages.append({
+                    "role": "assistant",
+                    "content": [block.model_dump() for block in final_message.content],
+                })
                 tool_results = []
                 asked_client = False
 
