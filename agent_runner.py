@@ -1,6 +1,9 @@
 """
 AgentRunner — standalone agent loop, decoupled from FastAPI.
 
+Uses true SSE streaming so the first token arrives immediately,
+preventing connection timeouts on slow/long model responses.
+
 Yields event dicts that callers convert to SSE, print, or assert against.
 Supports all tools including ask_client, which pauses the loop and surfaces
 a question to the caller so the human can answer before the next turn.
@@ -57,40 +60,49 @@ class AgentRunner:
         system_prompt: str,
         tools: list,
     ) -> AsyncGenerator[dict, None]:
-        for iteration in range(self.max_iterations):
-            response = await self.client.messages.create(
+        for _ in range(self.max_iterations):
+            # True streaming: first token arrives immediately, preventing timeouts
+            async with self.client.messages.stream(
                 model=self.model,
                 max_tokens=4096,
                 system=system_prompt,
                 tools=tools,
                 messages=messages,
-            )
+            ) as stream:
+                async for event in stream:
+                    etype = getattr(event, "type", None)
 
-            if response.stop_reason == "tool_use":
-                messages.append({"role": "assistant", "content": response.content})
+                    if etype == "content_block_start":
+                        block = event.content_block
+                        if block.type == "tool_use":
+                            yield {
+                                "type": "status",
+                                "content": _STATUS_MSGS.get(
+                                    block.name, f"🔧 正在调用工具 {block.name}…"
+                                ),
+                            }
+
+                    elif etype == "content_block_delta":
+                        delta = event.delta
+                        if delta.type == "text_delta" and delta.text:
+                            yield {"type": "token", "content": delta.text}
+
+                final_message = await stream.get_final_message()
+
+            if final_message.stop_reason == "tool_use":
+                messages.append({"role": "assistant", "content": final_message.content})
                 tool_results = []
                 asked_client = False
 
-                for block in response.content:
-                    if block.type == "text" and block.text.strip():
-                        yield {"type": "token", "content": block.text}
-
-                    elif block.type == "tool_use":
-                        yield {"type": "status", "content": _STATUS_MSGS.get(
-                            block.name, f"🔧 正在调用工具 {block.name}…"
-                        )}
-
+                for block in final_message.content:
+                    if block.type == "tool_use":
                         if block.name == "ask_client":
-                            # Pause loop — surface question to caller
                             yield {
                                 "type":       "ask_client",
                                 "question":   block.input.get("question", ""),
                                 "field":      block.input.get("field_name", ""),
                                 "field_type": block.input.get("field_type", "text"),
                             }
-                            # Provide a placeholder tool_result so the message
-                            # history stays valid; the real answer arrives as
-                            # the next user message via /chat.
                             tool_results.append({
                                 "type":        "tool_result",
                                 "tool_use_id": block.id,
@@ -101,8 +113,7 @@ class AgentRunner:
                         else:
                             _block = block
                             try:
-                                loop = asyncio.get_event_loop()
-                                result_str = await loop.run_in_executor(
+                                result_str = await asyncio.get_event_loop().run_in_executor(
                                     None,
                                     lambda: self.execute_tool(_block.name, _block.input),
                                 )
@@ -120,23 +131,15 @@ class AgentRunner:
                 messages.append({"role": "user", "content": tool_results})
 
                 if asked_client:
-                    # End this SSE turn; loop resumes when user replies via /chat
                     yield {"type": "done"}
                     return
 
             else:
-                # end_turn — stream final text and finish
+                # end_turn — text already streamed token by token above
                 text = "".join(
-                    block.text for block in response.content if block.type == "text"
+                    b.text for b in final_message.content if b.type == "text"
                 )
                 messages.append({"role": "assistant", "content": text})
-
-                words = text.split(" ")
-                for i, word in enumerate(words):
-                    chunk = word + (" " if i < len(words) - 1 else "")
-                    yield {"type": "token", "content": chunk}
-                    await asyncio.sleep(0.018)
-
                 yield {"type": "done"}
                 return
 
