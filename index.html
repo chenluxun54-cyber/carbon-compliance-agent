@@ -544,6 +544,15 @@
     #chat-send-btn:hover    { background: var(--green-hover); }
     #chat-send-btn:disabled { opacity: .35; cursor: not-allowed; }
     #chat-send-btn svg { width: 15px; height: 15px; fill: #fff; }
+    #chat-stop-btn {
+      display: none; position: absolute; right: 8px; bottom: 8px;
+      width: 32px; height: 32px; border-radius: 8px;
+      background: #fee2e2; border: none; cursor: pointer;
+      align-items: center; justify-content: center;
+      font-size: 15px; color: #dc2626; transition: background .15s;
+    }
+    #chat-stop-btn:hover { background: #fecaca; }
+    #chat-stop-btn.visible { display: flex; }
 
     #chat-disclaimer {
       max-width: 780px; margin: 6px auto 0;
@@ -813,6 +822,7 @@
             <button id="chat-send-btn" onclick="sendChatMessage()" title="发送 (Enter)">
               <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
+            <button id="chat-stop-btn" onclick="stopStreaming()" title="停止生成">■</button>
           </div>
           <div id="chat-disclaimer">AI 生成内容仅供参考，重要决策请结合专业意见</div>
         </div>
@@ -1431,11 +1441,20 @@ async function deleteSession(event, sid) {
 
 // ── Chat ─────────────────────────────────────────────────────────────
 async function initChatSession() {
-  const storedSid = localStorage.getItem('carbon_session_id');
+  // Always restore the most recent session that has messages;
+  // fall back to localStorage sid, then create new only if truly nothing exists.
+  let targetSid = localStorage.getItem('carbon_session_id');
+  try {
+    const listRes  = await fetch(`${API}/sessions`);
+    const list     = await listRes.json();
+    const withMsgs = list.find(s => s.preview); // first (most recent) with a preview
+    if (withMsgs) targetSid = withMsgs.session_id;
+  } catch (_) { /* fall through to stored/new */ }
+
   const res = await fetch(`${API}/new_session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: storedSid ? JSON.stringify({ session_id: storedSid }) : '{}',
+    body: targetSid ? JSON.stringify({ session_id: targetSid }) : '{}',
   });
   const d = await res.json();
   sessionId = d.session_id;
@@ -1499,10 +1518,23 @@ async function sendChatMessage() {
   await sendRaw(text, true);
 }
 
+let _abortController = null;
+
+function stopStreaming() {
+  if (_abortController) _abortController.abort();
+}
+
+function _setStreaming(on) {
+  isStreaming = on;
+  document.getElementById('chat-send-btn').disabled = on;
+  const stopBtn = document.getElementById('chat-stop-btn');
+  if (stopBtn) stopBtn.classList.toggle('visible', on);
+}
+
 async function sendRaw(text, showUser) {
   if (isStreaming) return;
-  isStreaming = true;
-  document.getElementById('chat-send-btn').disabled = true;
+  _setStreaming(true);
+  _abortController = new AbortController();
 
   if (showUser) {
     removeEmpty('chat-empty');
@@ -1516,6 +1548,7 @@ async function sendRaw(text, showUser) {
     const res = await fetch(`${API}/chat`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, message: text }),
+      signal: _abortController.signal,
     });
 
     const reader  = res.body.getReader();
@@ -1534,10 +1567,16 @@ async function sendRaw(text, showUser) {
       }
     }
   } catch (err) {
-    if (curAssistEl) curAssistEl.innerHTML = `<span style="color:#ef4444">⚠ 连接失败：${escHtml(String(err))}</span>`;
+    if (err.name === 'AbortError') {
+      // User stopped — finalize whatever was streamed so far
+      if (curAssistEl && curContent) curAssistEl.innerHTML = marked.parse(curContent);
+      document.querySelectorAll('.status-msg').forEach(e => e.remove());
+    } else {
+      if (curAssistEl) curAssistEl.innerHTML = `<span style="color:#ef4444">⚠ 连接失败：${escHtml(String(err))}</span>`;
+    }
   } finally {
-    isStreaming = false;
-    document.getElementById('chat-send-btn').disabled = false;
+    _abortController = null;
+    _setStreaming(false);
   }
 }
 
