@@ -331,8 +331,66 @@
     /* ── Tab 4: AI 对话 ────────────────────────────────── */
     #tab-chat {
       padding: 0;
-      flex-direction: column;
+      flex-direction: row;
+      gap: 0;
       overflow: hidden;
+    }
+
+    /* ── Session history panel ─────────────────────────────────── */
+    #chat-session-panel {
+      width: 220px; flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #session-panel-header {
+      padding: 12px 12px 10px; flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    #session-panel-title {
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .6px;
+    }
+    #new-session-btn {
+      height: 26px; padding: 0 10px;
+      background: var(--green); color: #fff;
+      border: none; border-radius: 6px;
+      font-size: 12px; font-weight: 600; font-family: var(--font); cursor: pointer;
+    }
+    #new-session-btn:hover { background: var(--green-hover); }
+    #session-list {
+      flex: 1; overflow-y: auto; padding: 6px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    #session-list::-webkit-scrollbar { width: 4px; }
+    #session-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .session-item {
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      display: flex; flex-direction: column; gap: 3px;
+      transition: background .15s;
+    }
+    .session-item:hover { background: #f3f4f6; }
+    .session-item.active { background: var(--green-light); }
+    .session-item-name {
+      font-size: 12.5px; font-weight: 500; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; outline: none;
+    }
+    .session-item.active .session-item-name { color: var(--green-dark); font-weight: 600; }
+    .session-item-name[contenteditable="true"] {
+      background: var(--surface); border-radius: 4px; padding: 1px 4px;
+      outline: 1px solid var(--green); white-space: nowrap; overflow: visible;
+    }
+    .session-item-time { font-size: 10.5px; color: var(--text-light); }
+    .session-item-preview {
+      font-size: 11px; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ── Chat main (right side of session panel) ───────────────── */
+    #chat-main {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; overflow: hidden;
     }
 
     #chat-messages {
@@ -685,29 +743,45 @@
 
     <!-- Tab: AI 对话 -->
     <div id="tab-chat" class="tab-content active" style="display:none">
-      <div id="chat-messages">
-        <div class="chat-empty" id="chat-empty">
-          <div class="big-icon">💬</div>
-          <h3>双碳顾问 AI</h3>
-          <p>查询企业评分后，我将自动了解企业背景，可直接向我提问。</p>
-          <div class="chip-row">
-            <div class="chip" onclick="sendChip('碳达峰和碳中和是什么意思？')">碳达峰碳中和基础</div>
-            <div class="chip" onclick="sendChip('企业如何参与碳交易市场？')">企业参与碳交易</div>
-            <div class="chip" onclick="sendChip('什么是 CBAM 碳边境调节机制？')">CBAM 解读</div>
-            <div class="chip" onclick="sendChip('如何制定企业碳中和路线图？')">碳中和路线图</div>
+
+      <!-- Session history panel -->
+      <div id="chat-session-panel">
+        <div id="session-panel-header">
+          <span id="session-panel-title">对话历史</span>
+          <button id="new-session-btn" onclick="createNewSession()">+ 新建</button>
+        </div>
+        <div id="session-list">
+          <div style="padding:12px 10px;font-size:12px;color:var(--text-light)">加载中…</div>
+        </div>
+      </div>
+
+      <!-- Chat main area -->
+      <div id="chat-main">
+        <div id="chat-messages">
+          <div class="chat-empty" id="chat-empty">
+            <div class="big-icon">💬</div>
+            <h3>双碳顾问 AI</h3>
+            <p>查询企业评分后，我将自动了解企业背景，可直接向我提问。</p>
+            <div class="chip-row">
+              <div class="chip" onclick="sendChip('碳达峰和碳中和是什么意思？')">碳达峰碳中和基础</div>
+              <div class="chip" onclick="sendChip('企业如何参与碳交易市场？')">企业参与碳交易</div>
+              <div class="chip" onclick="sendChip('什么是 CBAM 碳边境调节机制？')">CBAM 解读</div>
+              <div class="chip" onclick="sendChip('如何制定企业碳中和路线图？')">碳中和路线图</div>
+            </div>
           </div>
         </div>
-      </div>
-      <div id="chat-input-area">
-        <div id="chat-input-wrap">
-          <textarea id="chat-input" placeholder="向双碳顾问提问…" rows="1"
-            oninput="autoResize(this)" onkeydown="handleChatKey(event)"></textarea>
-          <button id="chat-send-btn" onclick="sendChatMessage()" title="发送 (Enter)">
-            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-          </button>
+        <div id="chat-input-area">
+          <div id="chat-input-wrap">
+            <textarea id="chat-input" placeholder="向双碳顾问提问…" rows="1"
+              oninput="autoResize(this)" onkeydown="handleChatKey(event)"></textarea>
+            <button id="chat-send-btn" onclick="sendChatMessage()" title="发送 (Enter)">
+              <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+          </div>
+          <div id="chat-disclaimer">AI 生成内容仅供参考，重要决策请结合专业意见</div>
         </div>
-        <div id="chat-disclaimer">AI 生成内容仅供参考，重要决策请结合专业意见</div>
       </div>
+
     </div>
 
     <!-- Tab: 政策库 -->
@@ -850,7 +924,8 @@ let curContent  = '';
 async function init() {
   await loadCompanies();
   await Promise.all([initChatSession(), initPolicyChatSession()]);
-  loadPolicies(); // non-blocking, loads in background
+  loadSessionList(); // non-blocking
+  loadPolicies();    // non-blocking
 }
 
 async function loadCompanies() {
@@ -1144,6 +1219,139 @@ function renderHistory(data) {
   });
 }
 
+// ── Session history panel ─────────────────────────────────────────────
+
+function formatRelativeTime(isoStr) {
+  if (!isoStr) return '';
+  const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
+  if (diff < 60)         return '刚刚';
+  if (diff < 3600)       return `${Math.floor(diff / 60)}分钟前`;
+  if (diff < 86400)      return `${Math.floor(diff / 3600)}小时前`;
+  if (diff < 86400 * 7)  return `${Math.floor(diff / 86400)}天前`;
+  return new Date(isoStr).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+}
+
+async function loadSessionList() {
+  try {
+    const res  = await fetch(`${API}/sessions`);
+    const list = await res.json();
+    const container = document.getElementById('session-list');
+    if (!list.length) {
+      container.innerHTML = '<div style="padding:12px 10px;font-size:12px;color:var(--text-light)">暂无历史对话</div>';
+      return;
+    }
+    container.innerHTML = list.map(s => {
+      const isActive = s.session_id === sessionId;
+      const name     = escHtml(s.name || '未命名对话');
+      const preview  = s.preview ? escHtml(s.preview) : '';
+      const timeStr  = escHtml(formatRelativeTime(s.last_active));
+      const sid      = escHtml(s.session_id);
+      return `
+        <div class="session-item${isActive ? ' active' : ''}" data-sid="${sid}"
+             onclick="selectSession('${sid}')" title="${name}">
+          <div class="session-item-name"
+               ondblclick="startRename(event,'${sid}')">${name}</div>
+          <div class="session-item-time">${timeStr}</div>
+          ${preview ? `<div class="session-item-preview">${preview}</div>` : ''}
+        </div>`;
+    }).join('');
+  } catch (e) {
+    console.warn('loadSessionList failed:', e);
+  }
+}
+
+async function selectSession(sid) {
+  if (sid === sessionId || isStreaming) return;
+  sessionId = sid;
+  localStorage.setItem('carbon_session_id', sessionId);
+  // Restore in backend memory
+  await fetch(`${API}/new_session`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({session_id: sid}),
+  });
+  // Clear chat UI
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = '';
+  const empty = document.createElement('div');
+  empty.className = 'chat-empty'; empty.id = 'chat-empty';
+  empty.innerHTML = `<div class="big-icon">💬</div><h3>双碳顾问 AI</h3>
+    <p>查询企业评分后，我将自动了解企业背景，可直接向我提问。</p>`;
+  msgs.appendChild(empty);
+  await restoreChatHistory();
+  // Update active highlight without full re-render
+  document.querySelectorAll('.session-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.sid === sid);
+    el.querySelector('.session-item-name')?.classList.toggle('active', el.dataset.sid === sid);
+  });
+}
+
+async function createNewSession() {
+  if (isStreaming) return;
+  const res = await fetch(`${API}/new_session`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}',
+  });
+  const d   = await res.json();
+  sessionId = d.session_id;
+  localStorage.setItem('carbon_session_id', sessionId);
+  // Clear chat UI + restore chips
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = '';
+  const empty = document.createElement('div');
+  empty.className = 'chat-empty'; empty.id = 'chat-empty';
+  empty.innerHTML = `
+    <div class="big-icon">💬</div>
+    <h3>双碳顾问 AI</h3>
+    <p>查询企业评分后，我将自动了解企业背景，可直接向我提问。</p>
+    <div class="chip-row">
+      <div class="chip" onclick="sendChip('碳达峰和碳中和是什么意思？')">碳达峰碳中和基础</div>
+      <div class="chip" onclick="sendChip('企业如何参与碳交易市场？')">企业参与碳交易</div>
+      <div class="chip" onclick="sendChip('什么是 CBAM 碳边境调节机制？')">CBAM 解读</div>
+      <div class="chip" onclick="sendChip('如何制定企业碳中和路线图？')">碳中和路线图</div>
+    </div>`;
+  msgs.appendChild(empty);
+  await loadSessionList();
+}
+
+function startRename(event, sid) {
+  event.stopPropagation();
+  const nameEl  = event.currentTarget;
+  const oldText = nameEl.textContent;
+  nameEl.contentEditable = 'true';
+  nameEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(nameEl);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
+
+  function finish() {
+    nameEl.contentEditable = 'false';
+    nameEl.removeEventListener('blur', finish);
+    nameEl.removeEventListener('keydown', onKey);
+    const newName = nameEl.textContent.trim().slice(0, 20);
+    if (!newName) { nameEl.textContent = oldText; return; }
+    if (newName === oldText) return;
+    nameEl.textContent = newName;
+    renameSession(sid, newName);
+  }
+  function onKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+    if (e.key === 'Escape') { nameEl.textContent = oldText; nameEl.blur(); }
+  }
+  nameEl.addEventListener('blur', finish);
+  nameEl.addEventListener('keydown', onKey);
+}
+
+async function renameSession(sid, name) {
+  try {
+    await fetch(`${API}/session/${sid}/name`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name}),
+    });
+  } catch (e) { console.warn('renameSession failed:', e); }
+}
+
 // ── Chat ─────────────────────────────────────────────────────────────
 async function initChatSession() {
   const storedSid = localStorage.getItem('carbon_session_id');
@@ -1276,6 +1484,7 @@ function handleSSE(payload, showUser) {
       curAssistEl.innerHTML = marked.parse(curContent);
       document.querySelectorAll('.status-msg').forEach(e => e.remove());
       chatScrollDown();
+      loadSessionList(); // pick up auto-generated name
       break;
     case 'calc_complete': {
       const sid = payload.session_id;

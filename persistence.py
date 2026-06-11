@@ -38,6 +38,10 @@ def ensure_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_messages_session
                 ON messages(session_id, id);
         """)
+        # Migration: add 'name' column if absent (existing DBs)
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+        if "name" not in cols:
+            conn.execute("ALTER TABLE sessions ADD COLUMN name TEXT DEFAULT NULL")
 
 
 def session_exists(sid: str) -> bool:
@@ -107,3 +111,57 @@ def load_display_history(sid: str) -> list:
         if isinstance(content, str) and content.strip():
             history.append({"role": role, "text": content})
     return history
+
+
+def get_session_name(sid: str) -> str | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT name FROM sessions WHERE session_id = ?", (sid,)
+        ).fetchone()
+    return row["name"] if row else None
+
+
+def update_session_name(sid: str, name: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE sessions SET name = ? WHERE session_id = ?", (name, sid)
+        )
+
+
+def list_sessions(limit: int = 50) -> list:
+    """Return sessions ordered by last_active DESC with preview from first real user message."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT s.session_id, s.name, s.created_at, s.last_active,
+                   (SELECT content FROM messages m
+                    WHERE m.session_id = s.session_id AND m.role = 'user'
+                    ORDER BY m.id LIMIT 1) AS first_user_content
+            FROM sessions s
+            ORDER BY s.last_active DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    result = []
+    for r in rows:
+        preview = ""
+        if r["first_user_content"]:
+            try:
+                text = json.loads(r["first_user_content"])
+                if isinstance(text, str):
+                    text = text.strip()
+                    if text.startswith("[系统上下文]"):
+                        text = ""
+                    preview = text[:30] + ("…" if len(text) > 30 else "")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        result.append({
+            "session_id":  r["session_id"],
+            "name":        r["name"],
+            "created_at":  r["created_at"],
+            "last_active": r["last_active"],
+            "preview":     preview,
+        })
+    return result

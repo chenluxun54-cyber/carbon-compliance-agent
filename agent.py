@@ -35,6 +35,7 @@ from report_template import generate_report_html
 from persistence import (
     ensure_db, session_exists, create_session,
     save_messages, load_api_messages, load_display_history,
+    get_session_name, update_session_name, list_sessions,
 )
 ensure_db()
 
@@ -66,6 +67,11 @@ _loader = DataLoader()
 _scorer = CarbonScorer()
 
 # ── System Prompt ─────────────────────────────────────────────────
+_AUTO_NAME_SYSTEM = (
+    "你是一个对话命名助手。根据用户的第一条消息，用不超过10个汉字为这段对话起一个简洁的名称。"
+    "只输出名称本身，不加标点，不加引号，不加任何解释。"
+)
+
 SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询顾问 Agent。
 
 你具备以下能力：
@@ -524,6 +530,60 @@ async def _persist(session_id: str) -> None:
         _session_saved_idx[session_id] = len(msgs)
 
 
+async def _auto_name_session(session_id: str, first_user_msg: str) -> None:
+    """Best-effort: generate a ≤10 char session name via Claude and save it."""
+    try:
+        response = await client.messages.create(
+            model=cfg["model"],
+            max_tokens=30,
+            system=_AUTO_NAME_SYSTEM,
+            messages=[{"role": "user", "content": first_user_msg[:200]}],
+        )
+        raw = "".join(b.text for b in response.content if b.type == "text").strip()
+        raw = raw.strip('"""\'「」【】《》（）()').strip()
+        name = raw[:10] if raw else ""
+        if name:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: update_session_name(session_id, name))
+    except Exception:
+        pass
+
+
+async def _maybe_auto_name(session_id: str) -> None:
+    """Fire auto-naming only after the very first completed assistant turn."""
+    try:
+        msgs = sessions.get(session_id, [])
+        # Count plain-text assistant turns
+        assistant_turns = sum(
+            1 for m in msgs
+            if m.get("role") == "assistant"
+            and isinstance(m.get("content"), str)
+            and m["content"].strip()
+        )
+        if assistant_turns != 1:
+            return
+        # Check DB for existing name
+        loop = asyncio.get_event_loop()
+        existing_name = await loop.run_in_executor(None, lambda: get_session_name(session_id))
+        if existing_name:
+            return
+        # Find first real user message
+        first_user_msg = next(
+            (
+                m["content"] for m in msgs
+                if m.get("role") == "user"
+                and isinstance(m.get("content"), str)
+                and not m["content"].strip().startswith("[系统上下文]")
+            ),
+            None,
+        )
+        if not first_user_msg:
+            return
+        await _auto_name_session(session_id, first_user_msg)
+    except Exception:
+        pass
+
+
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
 async def agent_stream(session_id: str, user_message: str):
     if not cfg["api_key"]:
@@ -555,6 +615,7 @@ async def agent_stream(session_id: str, user_message: str):
             yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
         finally:
             await _persist(session_id)
+            asyncio.create_task(_maybe_auto_name(session_id))
         return
 
     messages.append({"role": "user", "content": user_message})
@@ -594,6 +655,7 @@ async def agent_stream(session_id: str, user_message: str):
         yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
     finally:
         await _persist(session_id)
+        asyncio.create_task(_maybe_auto_name(session_id))
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────────
@@ -725,6 +787,24 @@ async def get_session_history(session_id: str):
     loop = asyncio.get_event_loop()
     history = await loop.run_in_executor(None, lambda: load_display_history(session_id))
     return history
+
+
+@app.get("/sessions")
+async def get_sessions_list(limit: int = 50):
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(None, lambda: list_sessions(limit))
+    return data
+
+
+@app.patch("/session/{session_id}/name")
+async def rename_session_endpoint(session_id: str, request: Request):
+    body = await request.json()
+    name = body.get("name", "").strip()[:20]
+    if not name:
+        return {"error": "name不能为空"}
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: update_session_name(session_id, name))
+    return {"session_id": session_id, "name": name}
 
 
 @app.get("/footprint-report/{session_id}")
