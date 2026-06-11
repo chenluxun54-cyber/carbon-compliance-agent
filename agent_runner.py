@@ -1,12 +1,12 @@
 """
 AgentRunner — standalone agent loop, decoupled from FastAPI.
 
-Uses true SSE streaming so the first token arrives immediately,
-preventing connection timeouts on slow/long model responses.
+First call uses streaming so the first token arrives immediately (prevents
+MiniMax initial-response timeouts). Follow-up calls after tool execution use
+messages.create() — MiniMax's Anthropic-compatible endpoint has issues with
+streaming for tool-result turns.
 
 Yields event dicts that callers convert to SSE, print, or assert against.
-Supports all tools including ask_client, which pauses the loop and surfaces
-a question to the caller so the human can answer before the next turn.
 """
 
 import asyncio
@@ -25,23 +25,6 @@ _STATUS_MSGS: dict[str, str] = {
 
 
 class AgentRunner:
-    """
-    Reusable agent loop. Use from FastAPI, CLI, or tests:
-
-        runner = AgentRunner(client, model, execute_tool)
-        async for event in runner.run(messages, system_prompt, tools):
-            ...  # handle event dict
-
-    Event types:
-      {"type": "token",      "content": "..."}          — streamed text chunk
-      {"type": "status",     "content": "..."}          — tool-call status banner
-      {"type": "ask_client", "question": "...",          — agent needs client input;
-                             "field": "...",               loop is paused, caller should
-                             "field_type": "..."}          surface question and resume
-      {"type": "done"}                                   — turn complete
-      {"type": "error",      "content": "..."}          — fatal error
-    """
-
     def __init__(
         self,
         client,
@@ -54,40 +37,67 @@ class AgentRunner:
         self.execute_tool = execute_tool
         self.max_iterations = max_iterations
 
+    async def _call_streaming(self, messages, system_prompt, tools):
+        """First call: stream tokens as they arrive."""
+        async with self.client.messages.stream(
+            model=self.model,
+            max_tokens=4096,
+            system=system_prompt,
+            tools=tools,
+            messages=messages,
+        ) as stream:
+            async for event in stream:
+                etype = getattr(event, "type", None)
+                if etype == "content_block_start":
+                    block = event.content_block
+                    if block.type == "tool_use":
+                        yield {
+                            "type": "status",
+                            "content": _STATUS_MSGS.get(
+                                block.name, f"🔧 正在调用工具 {block.name}…"
+                            ),
+                        }
+                elif etype == "content_block_delta":
+                    delta = event.delta
+                    if delta.type == "text_delta" and delta.text:
+                        yield {"type": "token", "content": delta.text}
+            final = await stream.get_final_message()
+        yield {"__final__": final}
+
+    async def _call_blocking(self, messages, system_prompt, tools):
+        """Follow-up calls: non-streaming create() — more reliable with tool results."""
+        response = await self.client.messages.create(
+            model=self.model,
+            max_tokens=4096,
+            system=system_prompt,
+            tools=tools,
+            messages=messages,
+        )
+        # Yield any text content token-by-token for consistent UX
+        for block in response.content:
+            if block.type == "text" and block.text:
+                yield {"type": "token", "content": block.text}
+        yield {"__final__": response}
+
     async def run(
         self,
         messages: list,
         system_prompt: str,
         tools: list,
     ) -> AsyncGenerator[dict, None]:
-        for _ in range(self.max_iterations):
-            # True streaming: first token arrives immediately, preventing timeouts
-            async with self.client.messages.stream(
-                model=self.model,
-                max_tokens=4096,
-                system=system_prompt,
-                tools=tools,
-                messages=messages,
-            ) as stream:
-                async for event in stream:
-                    etype = getattr(event, "type", None)
+        for iteration in range(self.max_iterations):
+            final_message = None
 
-                    if etype == "content_block_start":
-                        block = event.content_block
-                        if block.type == "tool_use":
-                            yield {
-                                "type": "status",
-                                "content": _STATUS_MSGS.get(
-                                    block.name, f"🔧 正在调用工具 {block.name}…"
-                                ),
-                            }
+            caller = self._call_streaming if iteration == 0 else self._call_blocking
+            async for event in caller(messages, system_prompt, tools):
+                if "__final__" in event:
+                    final_message = event["__final__"]
+                else:
+                    yield event
 
-                    elif etype == "content_block_delta":
-                        delta = event.delta
-                        if delta.type == "text_delta" and delta.text:
-                            yield {"type": "token", "content": delta.text}
-
-                final_message = await stream.get_final_message()
+            if final_message is None:
+                yield {"type": "error", "content": "未收到模型响应，请重试。"}
+                return
 
             if final_message.stop_reason == "tool_use":
                 messages.append({"role": "assistant", "content": final_message.content})
@@ -135,7 +145,6 @@ class AgentRunner:
                     return
 
             else:
-                # end_turn — text already streamed token by token above
                 text = "".join(
                     b.text for b in final_message.content if b.type == "text"
                 )
@@ -143,4 +152,4 @@ class AgentRunner:
                 yield {"type": "done"}
                 return
 
-        yield {"type": "error", "content": "已达最大迭代次数限制，对话终止。请尝试重新提问。"}
+        yield {"type": "error", "content": "已达最大迭代次数限制，请尝试重新提问。"}
