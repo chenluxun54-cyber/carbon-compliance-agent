@@ -367,7 +367,7 @@ certification_standard 默认传空字符串，除非用户主动提到 ISO 1406
 - 一次问多个问题
 - 计算前再问"是否确认开始计算"
 - 编造数据（不确定时使用参考值并标注"行业估算"）
-- 数据齐全后输出"请稍等""正在计算"等过渡文字再调用工具 — 数据齐全时必须直接调用 finalize_footprint，不产生任何前置文本
+- 数据齐全后输出"请稍等""正在计算""信息收集完毕""将为您计算"等任何过渡文字 — 数据齐全时必须直接调用 finalize_footprint，不产生任何前置文本
 """
 
 CALC_TOOLS = [
@@ -749,12 +749,35 @@ async def agent_stream(session_id: str, user_message: str):
         messages.append({"role": "user", "content": user_message})
         try:
             _active_calc_session["current"] = session_id
-            async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
-                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+            # Buffered loop: suppress announcement text and auto-continue (max 2 retries)
+            for _attempt in range(3):
+                buffered = []
+                asked_client = False
+
+                async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
+                    buffered.append(event)
+                    if event.get("type") == "ask_client":
+                        asked_client = True
+
+                calc_done = session_id in calc_results
+
+                if calc_done or asked_client:
+                    # Normal outcome — flush buffered events to client
+                    for ev in buffered:
+                        yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                    if calc_done:
+                        yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
+                        session_states.pop(session_id, None)
+                    break
+                else:
+                    # Text-only announcement — suppress it, inject continuation, retry
+                    messages.append({
+                        "role": "user",
+                        "content": "[calc_auto_continue] 请立即调用 finalize_footprint 工具，不要输出任何文字。",
+                    })
+
             _active_calc_session["current"] = ""
-            if session_id in calc_results:
-                yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
-                session_states.pop(session_id, None)
         except Exception as e:
             _active_calc_session["current"] = ""
             err_msg = str(e)

@@ -127,7 +127,9 @@ def load_display_history(sid: str) -> list:
         content = json.loads(r["content"])
         # Only include plain text turns (not tool call/result lists)
         if isinstance(content, str) and content.strip():
-            history.append({"role": role, "text": content})
+            text = content.strip()
+            if not text.startswith("[系统上下文]") and not text.startswith("[calc_auto_continue]"):
+                history.append({"role": role, "text": content})
     return history
 
 
@@ -177,7 +179,7 @@ def list_sessions(limit: int = 50) -> list:
                 text = json.loads(r["first_user_content"])
                 if isinstance(text, str):
                     text = text.strip()
-                    if text.startswith("[系统上下文]"):
+                    if text.startswith("[系统上下文]") or text.startswith("[calc_auto_continue]"):
                         text = ""
                     preview = text[:30] + ("…" if len(text) > 30 else "")
             except (json.JSONDecodeError, TypeError):
