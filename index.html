@@ -675,6 +675,33 @@
     #policy-chat-send-btn:hover { background: var(--green-hover); }
     #policy-chat-send-btn:disabled { opacity: .35; cursor: not-allowed; }
     #policy-chat-send-btn svg { width: 14px; height: 14px; fill: #fff; }
+    /* ── Confirm modal ─────────────────────────────────────────── */
+    #confirm-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.35); align-items: center; justify-content: center;
+    }
+    #confirm-overlay.open { display: flex; }
+    #confirm-box {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow-md); padding: 24px 28px;
+      min-width: 280px; max-width: 360px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    #confirm-box h4 { font-size: 15px; font-weight: 600; color: var(--text); margin: 0; }
+    #confirm-box p  { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; }
+    #confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    #confirm-cancel {
+      padding: 7px 16px; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font-size: 13px;
+      font-family: var(--font); cursor: pointer;
+    }
+    #confirm-cancel:hover { background: #f3f4f6; }
+    #confirm-ok {
+      padding: 7px 16px; border-radius: 7px; border: none;
+      background: #dc2626; color: #fff; font-size: 13px; font-weight: 600;
+      font-family: var(--font); cursor: pointer;
+    }
+    #confirm-ok:hover { background: #b91c1c; }
   </style>
 </head>
 <body>
@@ -1363,20 +1390,39 @@ async function renameSession(sid, name) {
   } catch (e) { console.warn('renameSession failed:', e); }
 }
 
+let _confirmResolve = null;
+
+function showConfirm() {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-overlay').classList.add('open');
+  });
+}
+
+function closeConfirm(result) {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(result); _confirmResolve = null; }
+}
+
+// Close on backdrop click
+document.getElementById('confirm-overlay')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeConfirm(false);
+});
+
 async function deleteSession(event, sid) {
   event.stopPropagation();
-  if (!confirm('删除这条对话记录？此操作不可撤销。')) return;
+  const confirmed = await showConfirm();
+  if (!confirmed) return;
   try {
     await fetch(`${API}/session/${sid}`, {method: 'DELETE'});
     if (sid === sessionId) {
-      // Switch to another existing session; only create new if none remain
       const res = await fetch(`${API}/sessions`);
       const remaining = (await res.json()).filter(s => s.session_id !== sid);
       if (remaining.length > 0) {
         await selectSession(remaining[0].session_id);
       } else {
         await createNewSession();
-        return; // createNewSession already calls loadSessionList
+        return;
       }
     }
     await loadSessionList();
@@ -1992,5 +2038,17 @@ function closeGapPanel() {
 // ── Boot ─────────────────────────────────────────────────────────────
 init();
 </script>
+
+<!-- In-page confirm modal -->
+<div id="confirm-overlay">
+  <div id="confirm-box">
+    <h4>删除对话</h4>
+    <p>删除这条对话记录？此操作不可撤销。</p>
+    <div id="confirm-actions">
+      <button id="confirm-cancel" onclick="closeConfirm(false)">取消</button>
+      <button id="confirm-ok"     onclick="closeConfirm(true)">删除</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
