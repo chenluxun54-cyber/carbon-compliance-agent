@@ -462,11 +462,28 @@ def execute_finalize_footprint(inputs: dict) -> str:
         assumptions=inputs.get("assumptions", []),
         certification_standard=inputs.get("certification_standard") or None,
     )
-    # Store result for report download, keyed by active session
+    # Store full result for report download
     sid = _active_calc_session.get("current", "")
     if sid:
         calc_results[sid] = result
-    return json.dumps(result, ensure_ascii=False, indent=2)
+
+    # Return a concise summary to the LLM — full detail is in calc_results
+    summary = {
+        "status": "calculation_complete",
+        "product_name": result["product_name"],
+        "functional_unit": result["functional_unit"],
+        "total_kgco2e": result["total_kgco2e"],
+        "analogy_km": result["analogy_km"],
+        "hotspot": result["hotspot"],
+        "hotspot_pct": result["hotspot_pct"],
+        "scope_summary": result["scope_summary"],
+        "top_sources": result["breakdown"][:3],
+        "assumptions": result["assumptions"],
+        "unknowns": result["unknowns"],
+        "iso14067_overall": result.get("compliance", {}).get("iso14067_overall"),
+        "cbam_covered": result.get("compliance", {}).get("cbam", {}).get("covered"),
+    }
+    return json.dumps(summary, ensure_ascii=False)
 
 
 def execute_tool(tool_name: str, inputs: dict) -> str:
@@ -669,6 +686,21 @@ app.add_middleware(
 )
 
 
+async def _with_keepalive(gen, interval: int = 8):
+    """Wrap an SSE generator; inject ': keepalive' comments when silent > interval seconds."""
+    try:
+        while True:
+            try:
+                data = await asyncio.wait_for(gen.__anext__(), timeout=interval)
+                yield data
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+            except StopAsyncIteration:
+                break
+    finally:
+        await gen.aclose()
+
+
 @app.post("/chat")
 async def chat(request: Request):
     body = await request.json()
@@ -679,7 +711,7 @@ async def chat(request: Request):
         return {"error": "消息不能为空"}
 
     return StreamingResponse(
-        agent_stream(session_id, user_message),
+        _with_keepalive(agent_stream(session_id, user_message)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
