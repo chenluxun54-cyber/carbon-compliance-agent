@@ -1569,9 +1569,11 @@ async function sendRaw(text, showUser) {
     }
   } catch (err) {
     if (err.name === 'AbortError') {
-      // User stopped — finalize whatever was streamed so far
-      if (curAssistEl && curContent) curAssistEl.innerHTML = marked.parse(curContent);
       document.querySelectorAll('.status-msg').forEach(e => e.remove());
+      if (curAssistEl) {
+        curAssistEl.closest('.msg-row')?.remove();
+        curAssistEl = null;
+      }
     } else {
       if (curAssistEl) curAssistEl.innerHTML = `<span style="color:#ef4444">⚠ 连接失败：${escHtml(String(err))}</span>`;
     }
