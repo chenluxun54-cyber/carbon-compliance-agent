@@ -151,3 +151,7 @@ Port conflict: `kill $(lsof -t -i:8000)` then restart
 |----------|-------|-------|
 | minimax (default) | MiniMax-Text-01 | First turn streams; tool-result turns use non-streaming (endpoint limitation) |
 | anthropic | claude-sonnet-4-6 | Full streaming |
+
+---
+
+## 自主学习规则

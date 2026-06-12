@@ -22,7 +22,11 @@ log = logging.getLogger(__name__)
 CHROMA_PATH = str(Path(__file__).parent.parent / "chroma_db")
 
 # Keywords that signal negative user feedback
-NEGATIVE_SIGNALS = ["不对", "错了", "重试", "不是这个", "你搞错了", "不对啊", "再试", "不行", "不准确"]
+NEGATIVE_SIGNALS = [
+    "不对", "错了", "重试", "不是这个", "你搞错了", "不对啊", "再试", "不行", "不准确",
+    "应该这样", "你应该", "不是这样的", "这样不对", "重新来", "不要这样",
+    "换个方式", "改一下", "你理解错了", "理解有误", "不是这么",
+]
 
 
 def is_negative_feedback(text: str) -> bool:

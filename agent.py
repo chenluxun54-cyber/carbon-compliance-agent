@@ -7,11 +7,15 @@ MODEL_PROVIDER=minimax    → MiniMax（Anthropic-compatible endpoint）
 """
 
 import json
+import logging
 import os
 import sys
 import uuid
 import asyncio
+from datetime import date
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 import anthropic
 from fastapi import FastAPI, Request
@@ -33,6 +37,7 @@ from calculator import (
 )
 from report_template import generate_report_html
 from memory.manager import memory_manager
+from memory.reflection import is_negative_feedback
 
 # ── Provider 配置 ─────────────────────────────────────────────────
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
@@ -94,6 +99,85 @@ def _build_memory_context(session_id: str, query: str = "") -> str:
         return memory_manager.build_memory_block(session_id, query)
     except Exception:
         return ""
+
+
+_AGENT_MD_PATH = Path(__file__).parent / "agent.md"
+_LEARNED_RULES_MARKER = "## 自主学习规则"
+
+
+def _read_learned_rules() -> str:
+    """Read the ## 自主学习规则 section from agent.md for injection into system prompt."""
+    try:
+        content = _AGENT_MD_PATH.read_text(encoding="utf-8")
+        if _LEARNED_RULES_MARKER not in content:
+            return ""
+        section = content.split(_LEARNED_RULES_MARKER, 1)[1]
+        if "\n## " in section:
+            section = section.split("\n## ", 1)[0]
+        # Only include actual rule lines (start with "- ["), ignore comments/blank lines
+        rules = "\n".join(l for l in section.splitlines() if l.startswith("- ["))
+        return f"【自主学习规则 — 请严格遵守】\n{rules}" if rules else ""
+    except Exception:
+        return ""
+
+
+def _append_rule_to_agent_md(rule: str) -> None:
+    """Append a learned behavior rule to agent.md, keeping the last 20."""
+    try:
+        content = _AGENT_MD_PATH.read_text(encoding="utf-8")
+        timestamp = date.today().isoformat()
+        new_entry = f"- [{timestamp}] {rule}"
+
+        marker = f"\n{_LEARNED_RULES_MARKER}\n"
+        if marker not in content:
+            content = content.rstrip() + f"\n\n---\n{marker}\n{new_entry}\n"
+        else:
+            head, tail = content.split(marker, 1)
+            # Preserve any sections after this one
+            if "\n## " in tail:
+                rules_block, rest = tail.split("\n## ", 1)
+                rest = "\n## " + rest
+            else:
+                rules_block, rest = tail, ""
+            existing = [l for l in rules_block.strip().splitlines() if l.startswith("- [")]
+            existing = existing[-19:]  # keep last 19 + new = 20 total
+            existing.append(new_entry)
+            content = head + marker + "\n".join(existing) + "\n" + rest
+
+        _AGENT_MD_PATH.write_text(content, encoding="utf-8")
+        log.info("agent.md updated with learned rule: %s", rule[:60])
+    except Exception as exc:
+        log.debug("Failed to update agent.md: %s", exc)
+
+
+async def _update_agent_md(session_id: str, user_message: str, messages: list) -> None:
+    """Ask LLM to distill a behavior rule from the user's correction, then write to agent.md."""
+    try:
+        recent = messages[-6:] if len(messages) >= 6 else messages
+        context = "\n".join(
+            f"{'用户' if m['role'] == 'user' else '助手'}: "
+            + (m["content"][:300] if isinstance(m.get("content"), str) else "[工具调用]")
+            for m in recent
+        )
+        rule_prompt = (
+            "以下是一段对话，用户指出了助手的错误或给出了正确指导。\n"
+            "请提炼一条简短的行为规则（20字以内），格式：\n"
+            "「当[场景]时，应该[正确做法]，不要[错误做法]」\n"
+            "如果用户只表达不满、没有给出具体指导，输出空字符串。\n\n"
+            f"对话：\n{context}\n\n"
+            "只输出规则本身，不加任何解释或标点以外的内容。"
+        )
+        response = await client.messages.create(
+            model=cfg["model"], max_tokens=80,
+            messages=[{"role": "user", "content": rule_prompt}],
+        )
+        rule = "".join(b.text for b in response.content if b.type == "text").strip()
+        rule = rule.strip("「」\"'")
+        if rule:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: _append_rule_to_agent_md(rule))
+    except Exception as exc:
+        log.debug("_update_agent_md failed: %s", exc)
 
 
 SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询顾问 Agent。
@@ -690,6 +774,9 @@ async def _maybe_extract_memories(session_id: str, user_message: str = "") -> No
             memory_extract_system=_MEMORY_EXTRACT_SYSTEM,
             user_message=user_message,
         )
+        # Self-learning: when user corrects the agent, distill a rule and write to agent.md
+        if user_message and is_negative_feedback(user_message):
+            asyncio.create_task(_update_agent_md(session_id, user_message, msgs))
     except Exception:
         pass
 
@@ -733,7 +820,12 @@ async def agent_stream(session_id: str, user_message: str):
     messages.append({"role": "user", "content": user_message})
 
     memory_ctx = _build_memory_context(session_id, user_message)
-    dynamic_prompt = SYSTEM_PROMPT + ("\n\n" + memory_ctx if memory_ctx else "")
+    learned_rules = _read_learned_rules()
+    dynamic_prompt = SYSTEM_PROMPT
+    if learned_rules:
+        dynamic_prompt += "\n\n" + learned_rules
+    if memory_ctx:
+        dynamic_prompt += "\n\n" + memory_ctx
 
     try:
         sub_agent_triggered = False
