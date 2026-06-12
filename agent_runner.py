@@ -132,6 +132,7 @@ class AgentRunner:
 
                         elif block.name == "record_data":
                             _block = block
+                            auto_calculated = False
                             try:
                                 result_str = await asyncio.get_event_loop().run_in_executor(
                                     None,
@@ -146,6 +147,7 @@ class AgentRunner:
                                     "missing_labels": prog.get("missing_labels", []),
                                 }
                                 if prog.get("auto_calculated"):
+                                    auto_calculated = True
                                     yield {"type": "status", "content": "✅ 数据收集完毕，碳足迹计算完成！"}
                             except Exception as err:
                                 result_str = f"错误：{err}"
@@ -155,6 +157,12 @@ class AgentRunner:
                                 "tool_use_id": block.id,
                                 "content":     result_str,
                             })
+
+                            # Calculation is done — skip LLM round-trip, let caller emit calc_complete
+                            if auto_calculated:
+                                messages.append({"role": "user", "content": tool_results})
+                                yield {"type": "done"}
+                                return
 
                         else:
                             _block = block

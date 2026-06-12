@@ -716,10 +716,13 @@ async def _run_calc_sub_agent(session_id: str, product_hint: str):
     intro = product_hint if product_hint else "请开始帮我计算产品碳足迹。"
     messages.append({"role": "user", "content": intro})
 
-    async for event in _calc_runner.run(messages, _effective_calc_prompt(), CALC_TOOLS):
-        yield event
-
-    _active_calc_session["current"] = ""
+    try:
+        async for event in _calc_runner.run(messages, _effective_calc_prompt(), CALC_TOOLS):
+            yield event
+    except Exception:
+        pass
+    finally:
+        _active_calc_session["current"] = ""
 
     if session_id in calc_results:
         yield {"type": "calc_complete", "session_id": session_id}
@@ -838,11 +841,6 @@ async def agent_stream(session_id: str, user_message: str):
         try:
             async for event in _calc_runner.run(messages, _effective_calc_prompt(), CALC_TOOLS):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-            if session_id in calc_results:
-                yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
-                session_states.pop(session_id, None)
-                calc_data_state.pop(session_id, None)
         except Exception as e:
             err_msg = str(e)
             if "authentication" in err_msg.lower() or "401" in err_msg:
@@ -853,6 +851,12 @@ async def agent_stream(session_id: str, user_message: str):
             await _persist(session_id)
             asyncio.create_task(_maybe_auto_name(session_id))
             asyncio.create_task(_maybe_extract_memories(session_id, user_message))
+
+        # Always check after runner — fires even if LLM errored after auto_finalize succeeded
+        if session_id in calc_results:
+            yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
+            session_states.pop(session_id, None)
+            calc_data_state.pop(session_id, None)
         return
 
     messages.append({"role": "user", "content": user_message})
