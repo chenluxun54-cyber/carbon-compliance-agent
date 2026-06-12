@@ -807,11 +807,23 @@ async def _maybe_extract_memories(session_id: str, user_message: str = "") -> No
         pass
 
 
+# Keywords that signal the user wants to download/view the footprint report
+_REPORT_REQUEST_KEYWORDS = ["报告", "下载", "report", "download", "html"]
+
+
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
 async def agent_stream(session_id: str, user_message: str):
     if not cfg["api_key"]:
         key_var = "ANTHROPIC_API_KEY" if MODEL_PROVIDER == "anthropic" else "MINIMAX_API_KEY"
         yield f"data: {json.dumps({'type': 'error', 'content': f'未设置 {key_var} 环境变量。'})}\n\n"
+        return
+
+    # Short-circuit: user asks for report + a calc result already exists → show download bubble directly
+    if (
+        session_id in calc_results
+        and any(kw in user_message for kw in _REPORT_REQUEST_KEYWORDS)
+    ):
+        yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
         return
 
     if session_id not in sessions:
