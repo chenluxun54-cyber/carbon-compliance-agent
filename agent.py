@@ -32,13 +32,7 @@ from calculator import (
     calc_transport, calc_packaging, calc_end_of_life, summarize_footprint,
 )
 from report_template import generate_report_html
-from persistence import (
-    ensure_db, session_exists, create_session,
-    save_messages, load_api_messages, load_display_history,
-    get_session_name, update_session_name, list_sessions, delete_session,
-    add_memory, get_memories, mark_session_summarized, is_session_summarized,
-)
-ensure_db()
+from memory.manager import memory_manager
 
 # ── Provider 配置 ─────────────────────────────────────────────────
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
@@ -94,29 +88,10 @@ _MEMORY_EXTRACT_SYSTEM = """\
 """
 
 
-def _build_memory_context() -> str:
-    """Build a memory context block from the DB to prepend to the system prompt."""
+def _build_memory_context(session_id: str, query: str = "") -> str:
+    """Build semantic memory context block (Tier 3 facts + Tier 4 reflections)."""
     try:
-        rows = get_memories(limit=40)
-        if not rows:
-            return ""
-        profiles  = [r["content"] for r in rows if r["memory_type"] == "user_profile"]
-        prefs     = [r["content"] for r in rows if r["memory_type"] == "preference"]
-        patterns  = [r["content"] for r in rows if r["memory_type"] == "qa_pattern"]
-        summaries = [r["content"] for r in rows if r["memory_type"] == "conversation_summary"][:3]
-
-        parts = ["【长期记忆】"]
-        if profiles:
-            parts.append("• 用户画像：" + "；".join(profiles[:5]))
-        if prefs:
-            parts.append("• 偏好与习惯：" + "；".join(prefs[:3]))
-        if patterns:
-            parts.append("• 常见问题模式：" + "；".join(patterns[:4]))
-        if summaries:
-            parts.append("• 近期对话摘要（最新3条）：\n  " + "\n  ".join(summaries))
-
-        result = "\n".join(parts)
-        return result[:1500] + ("…" if len(result) > 1500 else "")
+        return memory_manager.build_memory_block(session_id, query)
     except Exception:
         return ""
 
@@ -444,8 +419,6 @@ _sub_agent_pending: dict[str, dict] = {}
 calc_results: dict[str, dict] = {}
 # Active session_id being processed by the calc sub-agent (for result storage)
 _active_calc_session: dict[str, str] = {"current": ""}
-# Tracks how many messages have already been persisted per session
-_session_saved_idx: dict[str, int] = {}
 
 
 def execute_carbon_score(company_id: str, report_year: int) -> str:
@@ -588,15 +561,10 @@ async def _run_calc_sub_agent(session_id: str, product_hint: str):
 
 
 async def _persist(session_id: str) -> None:
-    """Save any new messages in this session to the DB."""
+    """Flush current message list to Redis (Tier 2)."""
     msgs = sessions.get(session_id, [])
-    from_idx = _session_saved_idx.get(session_id, 0)
-    if len(msgs) > from_idx:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None, lambda: save_messages(session_id, msgs, from_idx)
-        )
-        _session_saved_idx[session_id] = len(msgs)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: memory_manager.session.save_messages(session_id, msgs))
 
 
 async def _auto_name_session(session_id: str, first_user_msg: str) -> None:
@@ -613,7 +581,7 @@ async def _auto_name_session(session_id: str, first_user_msg: str) -> None:
         name = raw[:10] if raw else ""
         if name:
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, lambda: update_session_name(session_id, name))
+            await loop.run_in_executor(None, lambda: memory_manager.session.set_name(session_id, name))
     except Exception:
         pass
 
@@ -633,7 +601,7 @@ async def _maybe_auto_name(session_id: str) -> None:
             return
         # Check DB for existing name
         loop = asyncio.get_event_loop()
-        existing_name = await loop.run_in_executor(None, lambda: get_session_name(session_id))
+        existing_name = await loop.run_in_executor(None, lambda: memory_manager.session.get_name(session_id))
         if existing_name:
             return
         # Find first real user message
@@ -653,81 +621,18 @@ async def _maybe_auto_name(session_id: str) -> None:
         pass
 
 
-async def _extract_memories(session_id: str) -> None:
-    """Extract structured memories from a completed session via LLM. Fire-and-forget."""
+async def _maybe_extract_memories(session_id: str, user_message: str = "") -> None:
+    """Delegate post-turn memory work (fact extraction + reflection) to MemoryManager."""
     try:
-        loop = asyncio.get_event_loop()
-        history = await loop.run_in_executor(None, lambda: load_display_history(session_id))
-
-        real_turns = [
-            t for t in history
-            if not t.get("text", "").strip().startswith("[系统上下文]")
-        ]
-        real_user_turns = [t for t in real_turns if t.get("role") == "user"]
-        if len(real_user_turns) < 4:
-            return
-
-        conversation_text = "\n".join(
-            f"{'用户' if t['role'] == 'user' else '助手'}: {t['text'][:400]}"
-            for t in real_turns
-        )
-        if len(conversation_text) > 4000:
-            conversation_text = conversation_text[:4000] + "\n[...已截断]"
-
-        response = await client.messages.create(
-            model=cfg["model"],
-            max_tokens=600,
-            system=_MEMORY_EXTRACT_SYSTEM,
-            messages=[{"role": "user", "content": conversation_text}],
-        )
-        raw = "".join(b.text for b in response.content if b.type == "text").strip()
-
-        # Strip accidental markdown fences
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-
-        data = json.loads(raw)
-
-        def _save():
-            for fact in (data.get("user_profile") or [])[:5]:
-                if isinstance(fact, str) and fact.strip():
-                    add_memory("user_profile", fact.strip(), session_id, importance=2)
-            for pattern in (data.get("qa_pattern") or [])[:4]:
-                if isinstance(pattern, str) and pattern.strip():
-                    add_memory("qa_pattern", pattern.strip(), session_id, importance=2)
-            for pref in (data.get("preference") or [])[:3]:
-                if isinstance(pref, str) and pref.strip():
-                    add_memory("preference", pref.strip(), session_id, importance=3)
-            summary = (data.get("summary") or "").strip()
-            if summary:
-                add_memory("conversation_summary", summary, session_id, importance=1)
-            mark_session_summarized(session_id)
-
-        await loop.run_in_executor(None, _save)
-    except Exception:
-        pass
-
-
-async def _maybe_extract_memories(session_id: str) -> None:
-    """Gate: only extract when ≥4 real user turns and session not yet summarized."""
-    try:
-        loop = asyncio.get_event_loop()
-        already = await loop.run_in_executor(None, lambda: is_session_summarized(session_id))
-        if already:
-            return
         msgs = sessions.get(session_id, [])
-        real_user_count = sum(
-            1 for m in msgs
-            if m.get("role") == "user"
-            and isinstance(m.get("content"), str)
-            and not m["content"].strip().startswith("[系统上下文]")
+        await memory_manager.on_turn_complete(
+            session_id=session_id,
+            messages=msgs,
+            client=client,
+            model=cfg["model"],
+            memory_extract_system=_MEMORY_EXTRACT_SYSTEM,
+            user_message=user_message,
         )
-        if real_user_count < 4:
-            return
-        await _extract_memories(session_id)
     except Exception:
         pass
 
@@ -787,12 +692,12 @@ async def agent_stream(session_id: str, user_message: str):
         finally:
             await _persist(session_id)
             asyncio.create_task(_maybe_auto_name(session_id))
-            asyncio.create_task(_maybe_extract_memories(session_id))
+            asyncio.create_task(_maybe_extract_memories(session_id, user_message))
         return
 
     messages.append({"role": "user", "content": user_message})
 
-    memory_ctx = _build_memory_context()
+    memory_ctx = _build_memory_context(session_id, user_message)
     dynamic_prompt = SYSTEM_PROMPT + ("\n\n" + memory_ctx if memory_ctx else "")
 
     try:
@@ -831,7 +736,7 @@ async def agent_stream(session_id: str, user_message: str):
     finally:
         await _persist(session_id)
         asyncio.create_task(_maybe_auto_name(session_id))
-        asyncio.create_task(_maybe_extract_memories(session_id))
+        asyncio.create_task(_maybe_extract_memories(session_id, user_message))
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────────
@@ -920,16 +825,15 @@ async def new_session(request: Request):
         existing_sid = ""
 
     loop = asyncio.get_event_loop()
-    if existing_sid and await loop.run_in_executor(None, lambda: session_exists(existing_sid)):
-        msgs = await loop.run_in_executor(None, lambda: load_api_messages(existing_sid))
+    if existing_sid and await loop.run_in_executor(None, lambda: memory_manager.session.exists(existing_sid)):
+        msgs = await loop.run_in_executor(None, lambda: memory_manager.session.load_messages(existing_sid))
         sessions[existing_sid] = msgs
-        _session_saved_idx[existing_sid] = len(msgs)
+        memory_manager.short_term.set(existing_sid, msgs)
         return {"session_id": existing_sid, "restored": True, "message_count": len(msgs)}
 
     sid = str(uuid.uuid4())
     sessions[sid] = []
-    _session_saved_idx[sid] = 0
-    await loop.run_in_executor(None, lambda: create_session(sid))
+    await loop.run_in_executor(None, lambda: memory_manager.session.create(sid))
     return {"session_id": sid, "restored": False}
 
 
@@ -1007,26 +911,24 @@ async def get_policy(policy_id: str):
 @app.get("/session/{session_id}/history")
 async def get_session_history(session_id: str):
     loop = asyncio.get_event_loop()
-    history = await loop.run_in_executor(None, lambda: load_display_history(session_id))
+    history = await loop.run_in_executor(None, lambda: memory_manager.session.load_display(session_id))
     return history
 
 
 @app.get("/sessions")
 async def get_sessions_list(limit: int = 50):
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(None, lambda: list_sessions(limit))
+    data = await loop.run_in_executor(None, lambda: memory_manager.session.list(limit))
     return data
 
 
 @app.delete("/session/{session_id}")
 async def delete_session_endpoint(session_id: str):
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: delete_session(session_id))
-    # Clean up in-memory state
+    await loop.run_in_executor(None, lambda: memory_manager.wipe_session(session_id))
     sessions.pop(session_id, None)
     session_states.pop(session_id, None)
     calc_results.pop(session_id, None)
-    _session_saved_idx.pop(session_id, None)
     return {"deleted": session_id}
 
 
@@ -1037,8 +939,16 @@ async def rename_session_endpoint(session_id: str, request: Request):
     if not name:
         return {"error": "name不能为空"}
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: update_session_name(session_id, name))
+    await loop.run_in_executor(None, lambda: memory_manager.session.set_name(session_id, name))
     return {"session_id": session_id, "name": name}
+
+
+@app.delete("/user/{user_id}/memory")
+async def wipe_user_memory(user_id: str):
+    """Governance: wipe all Tier 3 (facts) + Tier 4 (reflections) for a user."""
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, lambda: memory_manager.wipe_user(user_id))
+    return {"user_id": user_id, **result}
 
 
 @app.get("/footprint-report/{session_id}")

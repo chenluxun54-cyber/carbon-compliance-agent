@@ -5,3 +5,6 @@ pandas
 openpyxl
 numpy
 python-multipart
+chromadb
+sentence-transformers
+redis
