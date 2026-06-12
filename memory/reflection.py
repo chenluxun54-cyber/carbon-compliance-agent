@@ -32,9 +32,9 @@ def is_negative_feedback(text: str) -> bool:
 def _load_encoder():
     try:
         from sentence_transformers import SentenceTransformer
-        return SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+        return SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2", local_files_only=True)
     except Exception as exc:
-        log.warning("SentenceTransformer unavailable (%s) — reflection search degraded", exc)
+        log.warning("SentenceTransformer not in local cache (%s) — reflection search degraded", type(exc).__name__)
         return None
 
 
@@ -68,14 +68,15 @@ class ReflectionMemory:
         if not content.strip():
             return
         emb = self._embed([content])
-        add_kwargs: dict = dict(
-            ids       = [str(uuid.uuid4())],
-            documents = [content],
-            metadatas = [{"session_id": session_id, "error_type": error_type, "timestamp": time.time()}],
+        if emb is None:
+            log.debug("Skipping reflection store — encoder not yet available")
+            return
+        self._col.add(
+            ids        = [str(uuid.uuid4())],
+            embeddings = [emb[0]],
+            documents  = [content],
+            metadatas  = [{"session_id": session_id, "error_type": error_type, "timestamp": time.time()}],
         )
-        if emb is not None:
-            add_kwargs["embeddings"] = [emb[0]]
-        self._col.add(**add_kwargs)
 
     # ── recall ────────────────────────────────────────────────────
 

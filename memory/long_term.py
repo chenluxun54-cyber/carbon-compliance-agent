@@ -31,12 +31,15 @@ CHROMA_PATH  = str(Path(__file__).parent.parent / "chroma_db")
 
 
 def _load_encoder(model_name: str):
-    """Load SentenceTransformer; return None if unavailable (model not downloaded yet)."""
+    """Load SentenceTransformer from local cache only (no network).
+    Returns None if model weights are not yet downloaded — caller degrades gracefully.
+    Run `python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"` once to download.
+    """
     try:
         from sentence_transformers import SentenceTransformer
-        return SentenceTransformer(model_name)
+        return SentenceTransformer(model_name, local_files_only=True)
     except Exception as exc:
-        log.warning("SentenceTransformer not available (%s) — semantic search disabled", exc)
+        log.warning("SentenceTransformer not in local cache (%s) — semantic search disabled until model is downloaded", type(exc).__name__)
         return None
 
 
@@ -82,17 +85,18 @@ class LongTermMemory:
         texts = [f["text"] for f in valid]
         embeddings = self._embed(texts)
         ts = time.time()
-        add_kwargs: dict = dict(
-            ids       = [str(uuid.uuid4()) for _ in texts],
-            documents = texts,
-            metadatas = [
+        if embeddings is None:
+            log.debug("Skipping Chroma store — encoder not yet available")
+            return
+        self._col.add(
+            ids        = [str(uuid.uuid4()) for _ in texts],
+            embeddings = embeddings,
+            documents  = texts,
+            metadatas  = [
                 {"user_id": user_id, "memory_type": f.get("memory_type", "fact"), "timestamp": ts}
                 for f in valid
             ],
         )
-        if embeddings is not None:
-            add_kwargs["embeddings"] = embeddings
-        self._col.add(**add_kwargs)
 
     # ── recall ────────────────────────────────────────────────────
 
