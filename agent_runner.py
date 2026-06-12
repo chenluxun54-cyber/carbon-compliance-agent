@@ -35,11 +35,13 @@ class AgentRunner:
         model: str,
         execute_tool: Callable[[str, dict], str],
         max_iterations: int = 10,
+        force_blocking: bool = False,
     ):
         self.client = client
         self.model = model
         self.execute_tool = execute_tool
         self.max_iterations = max_iterations
+        self.force_blocking = force_blocking
 
     async def _call_streaming(self, messages, system_prompt, tools):
         """First call: stream tokens as they arrive."""
@@ -92,7 +94,7 @@ class AgentRunner:
         for iteration in range(self.max_iterations):
             final_message = None
 
-            caller = self._call_streaming if iteration == 0 else self._call_blocking
+            caller = self._call_blocking if self.force_blocking or iteration > 0 else self._call_streaming
             async for event in caller(messages, system_prompt, tools):
                 if "__final__" in event:
                     final_message = event["__final__"]

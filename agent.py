@@ -360,7 +360,8 @@ CALC_TOOLS = [
                 },
                 "end_of_life_method":     {"type": "string",  "description": "报废处置方式：填埋/焚烧/回收/混合/堆肥"},
                 "recycled_pct":           {"type": "number",  "description": "回收比例 0-100，处置方式为混合时使用"}
-            }
+            },
+            "required": []
         }
     },
 ]
@@ -442,7 +443,7 @@ def execute_record_data(session_id: str, inputs: dict) -> str:
     return json.dumps(out, ensure_ascii=False)
 
 
-def _auto_finalize(session_id: str, state: dict) -> dict | None:
+def _auto_finalize(session_id: str, state: dict):
     """Build finalize_footprint inputs from accumulated state and run calculation."""
     try:
         total_mat_kg = sum(m.get("kg", 0) for m in state.get("materials", []))
@@ -585,7 +586,7 @@ def execute_tool(tool_name: str, inputs: dict) -> str:
 
 # ── AgentRunner 单例（依赖 execute_tool，须在其后定义）──────────
 _runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_tool)
-_calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_tool, max_iterations=20)
+_calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_tool, max_iterations=20, force_blocking=True)
 
 
 async def _run_calc_sub_agent(session_id: str, product_hint: str):
