@@ -289,6 +289,8 @@ CALC_SYSTEM_PROMPT = """你是一位亲切的产品碳足迹计算助手，帮�
 - 主要原材料和各自重量（千克）
   可识别材料：钢铁、铝、铜、锌、镍、塑料（PP/PE/ABS/PET/PC/PVC/PA/PU）、
   玻璃、纸板、木材、PCB、锂电池、碳纤维、橡胶、陶瓷、涤纶、羊毛、皮革等
+  记录格式（materials_str）：用 "材料名:千克数" 写，多种材料用逗号分隔
+  例：materials_str = "铝:0.27,塑料:0.03"
 
 【可选信息（用户回答"不知道"/"没有"/"跳过"就跳过，不要催）】
 - 生产时用天然气/柴油/煤吗
@@ -326,40 +328,18 @@ CALC_TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "product_name":           {"type": "string",  "description": "产品名称"},
-                "weight_kg":              {"type": "number",  "description": "每件重量（千克）"},
-                "region":                 {"type": "string",  "description": "工厂所在省份或地区"},
-                "electricity_kwh":        {"type": "number",  "description": "生产一件产品用电量（度）"},
-                "materials": {
-                    "type": "array",
-                    "description": "原材料列表",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "kg":   {"type": "number"}
-                        },
-                        "required": ["name", "kg"]
-                    }
-                },
-                "fuel_type":              {"type": "string",  "description": "燃料类型，如 天然气_m3、柴油_L"},
-                "fuel_quantity":          {"type": "number",  "description": "燃料用量"},
-                "transport_distance_km":  {"type": "number",  "description": "运输距离（千米）"},
-                "transport_mode":         {"type": "string",  "description": "运输方式：公路/铁路/海运/航空"},
-                "packaging": {
-                    "type": "array",
-                    "description": "包装材料列表",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "kg":   {"type": "number"}
-                        },
-                        "required": ["name", "kg"]
-                    }
-                },
-                "end_of_life_method":     {"type": "string",  "description": "报废处置方式：填埋/焚烧/回收/混合/堆肥"},
-                "recycled_pct":           {"type": "number",  "description": "回收比例 0-100，处置方式为混合时使用"}
+                "product_name":          {"type": "string", "description": "产品名称"},
+                "weight_kg":             {"type": "number", "description": "每件重量（千克）"},
+                "region":                {"type": "string", "description": "工厂所在省份或地区"},
+                "electricity_kwh":       {"type": "number", "description": "生产一件产品用电量（度）"},
+                "materials_str":         {"type": "string", "description": "原材料，格式：\"材料名:千克数\"，多种用逗号分隔，例：\"铝:0.27,塑料:0.03\""},
+                "fuel_type":             {"type": "string", "description": "燃料类型，如 天然气_m3、柴油_L"},
+                "fuel_quantity":         {"type": "number", "description": "燃料用量"},
+                "transport_distance_km": {"type": "number", "description": "运输距离（千米）"},
+                "transport_mode":        {"type": "string", "description": "运输方式：公路/铁路/海运/航空"},
+                "packaging_str":         {"type": "string", "description": "包装材料，格式同 materials_str，例：\"瓦楞纸箱:0.05\""},
+                "end_of_life_method":    {"type": "string", "description": "报废处置方式：填埋/焚烧/回收/混合/堆肥"},
+                "recycled_pct":          {"type": "number", "description": "回收比例 0-100，处置方式为混合时使用"}
             },
             "required": []
         }
@@ -386,6 +366,20 @@ def execute_carbon_score(company_id: str, report_year: int) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
+def _parse_item_str(s: str) -> list:
+    """Parse 'material:kg,material:kg' string into [{name, kg}, ...] list."""
+    items = []
+    for part in s.split(","):
+        part = part.strip()
+        if ":" in part:
+            name, _, kg_str = part.rpartition(":")
+            try:
+                items.append({"name": name.strip(), "kg": float(kg_str.strip())})
+            except ValueError:
+                pass
+    return items
+
+
 def execute_record_data(session_id: str, inputs: dict) -> str:
     """Accumulate calc fields into session state, return progress JSON."""
     _DEFAULTS = {
@@ -397,17 +391,22 @@ def execute_record_data(session_id: str, inputs: dict) -> str:
     }
     state = calc_data_state.setdefault(session_id, dict(_DEFAULTS))
 
+    # Parse flat string fields into list fields
+    for str_key, list_key in (("materials_str", "materials"), ("packaging_str", "packaging")):
+        raw = inputs.pop(str_key, None)
+        if raw:
+            parsed = _parse_item_str(str(raw))
+            if parsed:
+                existing = {m["name"] for m in state[list_key]}
+                for item in parsed:
+                    if item["name"] not in existing:
+                        state[list_key].append(item)
+                        existing.add(item["name"])
+
     for k, v in inputs.items():
         if k not in _DEFAULTS:
             continue
-        if k in ("materials", "packaging"):
-            if v:
-                existing = {m["name"] for m in state[k]}
-                for item in v:
-                    if item.get("name") and item["name"] not in existing:
-                        state[k].append(item)
-                        existing.add(item["name"])
-        elif v is not None and v != "" and v != 0 and v != 0.0:
+        if v is not None and v != "" and v != 0 and v != 0.0:
             state[k] = v
 
     # Auto-derive functional_unit for finalize_footprint
