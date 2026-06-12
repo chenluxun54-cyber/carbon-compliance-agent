@@ -29,12 +29,30 @@ def is_negative_feedback(text: str) -> bool:
     return any(kw in text for kw in NEGATIVE_SIGNALS)
 
 
+def _ngram_embed(texts: list, dim: int = 384) -> list:
+    import hashlib
+    import numpy as np
+    result = []
+    for text in texts:
+        vec = np.zeros(dim, dtype=np.float32)
+        text = text.lower()
+        for i in range(max(1, len(text) - 1)):
+            gram = text[i:i+2]
+            idx = int(hashlib.md5(gram.encode("utf-8")).hexdigest(), 16) % dim
+            vec[idx] += 1.0
+        norm = float(np.linalg.norm(vec))
+        if norm > 0:
+            vec /= norm
+        result.append(vec.tolist())
+    return result
+
+
 def _load_encoder():
     try:
         from sentence_transformers import SentenceTransformer
         return SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2", local_files_only=True)
     except Exception as exc:
-        log.warning("SentenceTransformer not in local cache (%s) — reflection search degraded", type(exc).__name__)
+        log.info("Neural encoder not in local cache (%s) — using offline n-gram fallback", type(exc).__name__)
         return None
 
 
@@ -55,11 +73,12 @@ class ReflectionMemory:
             self._encoder = _load_encoder()
         return self._encoder
 
-    def _embed(self, texts: list[str]) -> list:
+    def _embed(self, texts: list) -> list:
+        """Always returns embeddings — neural if model loaded, n-gram fallback otherwise."""
         enc = self._get_encoder()
-        if enc is None:
-            return None
-        return enc.encode(texts, normalize_embeddings=True).tolist()
+        if enc is not None:
+            return enc.encode(texts, normalize_embeddings=True).tolist()
+        return _ngram_embed(texts)
 
     # ── write ─────────────────────────────────────────────────────
 
@@ -68,9 +87,6 @@ class ReflectionMemory:
         if not content.strip():
             return
         emb = self._embed([content])
-        if emb is None:
-            log.debug("Skipping reflection store — encoder not yet available")
-            return
         self._col.add(
             ids        = [str(uuid.uuid4())],
             embeddings = [emb[0]],
@@ -86,27 +102,19 @@ class ReflectionMemory:
             return []
         n = min(top_k, self._col.count())
         try:
-            emb = self._embed([query])
-            if emb is not None:
-                res = self._col.query(
-                    query_embeddings = [emb[0]],
-                    n_results        = n,
-                    include          = ["documents", "metadatas", "distances"],
-                )
-                docs  = res["documents"][0]
-                metas = res["metadatas"][0]
-                dists = res["distances"][0]
-                return [
-                    {"text": doc, "error_type": m.get("error_type",""), "distance": round(d,4)}
-                    for doc, m, d in zip(docs, metas, dists)
-                ]
-            else:
-                # Fallback: return most recent reflections
-                raw = self._col.get(include=["documents", "metadatas"])
-                return [
-                    {"text": d, "error_type": m.get("error_type",""), "distance": 0.0}
-                    for d, m in zip(raw["documents"][-n:], raw["metadatas"][-n:])
-                ]
+            emb = self._embed([query])[0]
+            res = self._col.query(
+                query_embeddings = [emb],
+                n_results        = n,
+                include          = ["documents", "metadatas", "distances"],
+            )
+            docs  = res["documents"][0]
+            metas = res["metadatas"][0]
+            dists = res["distances"][0]
+            return [
+                {"text": doc, "error_type": m.get("error_type",""), "distance": round(d,4)}
+                for doc, m, d in zip(docs, metas, dists)
+            ]
         except Exception:
             return []
 

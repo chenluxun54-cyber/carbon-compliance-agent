@@ -30,16 +30,40 @@ DECAY_LAMBDA = 0.01   # time-decay rate (days)
 CHROMA_PATH  = str(Path(__file__).parent.parent / "chroma_db")
 
 
+def _ngram_embed(texts: list, dim: int = 384) -> list:
+    """
+    Offline character-bigram hash embedding for Chinese + English.
+    Used as fallback when the neural model is unavailable.
+    Quality: good for exact/partial keyword matching; not as strong as neural similarity.
+    """
+    import hashlib
+    import numpy as np
+    result = []
+    for text in texts:
+        vec = np.zeros(dim, dtype=np.float32)
+        text = text.lower()
+        for i in range(max(1, len(text) - 1)):
+            gram = text[i:i+2]
+            idx = int(hashlib.md5(gram.encode("utf-8")).hexdigest(), 16) % dim
+            vec[idx] += 1.0
+        norm = float(np.linalg.norm(vec))
+        if norm > 0:
+            vec /= norm
+        result.append(vec.tolist())
+    return result
+
+
 def _load_encoder(model_name: str):
     """Load SentenceTransformer from local cache only (no network).
-    Returns None if model weights are not yet downloaded — caller degrades gracefully.
-    Run `python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"` once to download.
+    Returns None if model weights are not yet downloaded.
+    Run once to download:
+      HF_ENDPOINT=https://hf-mirror.com python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
     """
     try:
         from sentence_transformers import SentenceTransformer
         return SentenceTransformer(model_name, local_files_only=True)
     except Exception as exc:
-        log.warning("SentenceTransformer not in local cache (%s) — semantic search disabled until model is downloaded", type(exc).__name__)
+        log.info("Neural encoder not in local cache (%s) — using offline n-gram fallback", type(exc).__name__)
         return None
 
 
@@ -63,11 +87,12 @@ class LongTermMemory:
             self._encoder = _load_encoder(self._embed_model)
         return self._encoder
 
-    def _embed(self, texts: list[str]) -> list:
+    def _embed(self, texts: list) -> list:
+        """Always returns embeddings — neural if model loaded, n-gram fallback otherwise."""
         enc = self._get_encoder()
-        if enc is None:
-            return None
-        return enc.encode(texts, normalize_embeddings=True).tolist()
+        if enc is not None:
+            return enc.encode(texts, normalize_embeddings=True).tolist()
+        return _ngram_embed(texts)
 
     # ── write ─────────────────────────────────────────────────────
 
@@ -85,9 +110,6 @@ class LongTermMemory:
         texts = [f["text"] for f in valid]
         embeddings = self._embed(texts)
         ts = time.time()
-        if embeddings is None:
-            log.debug("Skipping Chroma store — encoder not yet available")
-            return
         self._col.add(
             ids        = [str(uuid.uuid4()) for _ in texts],
             embeddings = embeddings,
@@ -110,27 +132,13 @@ class LongTermMemory:
             return []
         n_results = min(top_k * 3, self._col.count())
         try:
-            query_emb = self._embed([query])
-            if query_emb is not None:
-                res = self._col.query(
-                    query_embeddings = [query_emb[0]],
-                    n_results        = n_results,
-                    where            = {"user_id": user_id},
-                    include          = ["documents", "metadatas", "distances"],
-                )
-            else:
-                # No encoder — retrieve most recent facts for this user
-                raw = self._col.get(
-                    where   = {"user_id": user_id},
-                    include = ["documents", "metadatas"],
-                )
-                docs  = raw.get("documents", [])[-n_results:]
-                metas = raw.get("metadatas", [])[-n_results:]
-                return [
-                    {"text": d, "memory_type": m.get("memory_type","fact"), "score": 0.0,
-                     "age_days": round((time.time() - m.get("timestamp", time.time())) / 86400, 1)}
-                    for d, m in zip(docs, metas)
-                ]
+            query_emb = self._embed([query])[0]
+            res = self._col.query(
+                query_embeddings = [query_emb],
+                n_results        = n_results,
+                where            = {"user_id": user_id},
+                include          = ["documents", "metadatas", "distances"],
+            )
         except Exception:
             return []
 
