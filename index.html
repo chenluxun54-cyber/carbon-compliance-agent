@@ -1682,6 +1682,12 @@ function handleSSE(payload, showUser) {
       }
       break;
     }
+    case 'calc_start': {
+      // New product calc starting — wipe previous report and reset progress
+      document.querySelectorAll('.calc-report-bubble, .compliance-row').forEach(e => e.remove());
+      resetCalcProgress();
+      break;
+    }
     case 'calc_complete': {
       const sid = payload.session_id;
       // Hide progress tracker

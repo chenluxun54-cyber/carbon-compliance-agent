@@ -590,6 +590,11 @@ _calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execu
 
 async def _run_calc_sub_agent(session_id: str, product_hint: str):
     """Run the product carbon footprint sub-agent for the first turn."""
+    # Clear any previous calc result so auto-finalize can fire for the new product
+    calc_results.pop(session_id, None)
+    calc_data_state.pop(session_id, None)
+    yield {"type": "calc_start"}
+
     _active_calc_session["current"] = session_id
     messages = sessions[session_id]
     intro = product_hint if product_hint else "请开始帮我计算产品碳足迹。"
