@@ -1683,19 +1683,18 @@ function handleSSE(payload, showUser) {
       break;
     }
     case 'calc_start': {
-      // New product calc starting — wipe previous report and reset progress
-      document.querySelectorAll('.calc-report-bubble, .compliance-row').forEach(e => e.remove());
+      // New product calc starting — reset progress tracker only, keep previous results
       resetCalcProgress();
       break;
     }
     case 'calc_complete': {
       const sid = payload.session_id;
-      // Hide progress tracker
+      // Hide progress tracker (keep previous product bubbles intact)
       const progPanel = document.getElementById('calc-progress');
       if (progPanel) progPanel.style.display = 'none';
-      document.querySelectorAll('.calc-report-bubble, .compliance-row').forEach(e => e.remove());
 
-      // Assistant bubble with download link
+      // Single chat bubble: download link + compliance badges inline
+      const compDivId = `comp-${sid}`;
       const dlBubble = document.createElement('div');
       dlBubble.className = 'msg-row assistant calc-report-bubble';
       dlBubble.innerHTML = `<div class="msg-bubble">
@@ -1706,21 +1705,20 @@ function handleSSE(payload, showUser) {
                   text-decoration:none;font-size:13px;font-weight:600">
           📥 下载碳足迹报告
         </a>
+        <div id="${compDivId}" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="color:#9ca3af;font-size:12px">🔍 加载合规状态...</span>
+        </div>
       </div>`;
       document.getElementById('chat-messages').appendChild(dlBubble);
-
-      // Compliance status row (populated by fetch below)
-      const compRow = document.createElement('div');
-      compRow.className = 'compliance-row';
-      compRow.innerHTML = '<span style="color:#9ca3af">🔍 加载合规状态...</span>';
-      document.getElementById('chat-messages').appendChild(compRow);
       chatScrollDown();
 
-      // Fetch compliance JSON and update the row
+      // Fetch compliance JSON and update the inline div
       fetch(`/compliance-check/${sid}`)
         .then(r => r.json())
         .then(data => {
-          if (data.error) { compRow.innerHTML = '<span style="color:#9ca3af">合规信息不可用</span>'; return; }
+          const compDiv = document.getElementById(compDivId);
+          if (!compDiv) return;
+          if (data.error) { compDiv.innerHTML = '<span style="color:#9ca3af;font-size:12px">合规信息不可用</span>'; return; }
           const isoStatus = data.iso14067_overall || 'unknown';
           const isoLabel = {pass:'通过', partial:'部分符合', fail:'不符合'}[isoStatus] || '—';
           const isoClass = {pass:'cb-pass', partial:'cb-partial', fail:'cb-fail'}[isoStatus] || 'cb-unknown';
@@ -1728,14 +1726,13 @@ function handleSSE(payload, showUser) {
           const cbamCovered = cbam.covered;
           const cbamLabel = cbamCovered ? `CBAM 覆盖 | €${cbam.cost_eur_estimate}` : 'CBAM 不覆盖';
           const cbamClass = cbamCovered ? 'cb-covered' : 'cb-clear';
-          compRow.innerHTML = `
-            <span style="font-weight:600;color:#374151">合规状态</span>
+          compDiv.innerHTML = `
+            <span style="font-weight:600;color:#374151;font-size:12px">合规</span>
             <span class="compliance-badge ${isoClass}">📋 ISO 14067: ${escHtml(isoLabel)}</span>
-            <span class="compliance-badge ${cbamClass}">🇪🇺 ${escHtml(cbamLabel)}</span>
-            <span style="color:#9ca3af;font-size:11px">报告中含完整清单</span>`;
+            <span class="compliance-badge ${cbamClass}">🇪🇺 ${escHtml(cbamLabel)}</span>`;
           chatScrollDown();
         })
-        .catch(() => { compRow.innerHTML = '<span style="color:#9ca3af">合规信息暂不可用</span>'; });
+        .catch(() => { const d = document.getElementById(compDivId); if (d) d.innerHTML = '<span style="color:#9ca3af;font-size:12px">合规信息暂不可用</span>'; });
       break;
     }
   }
