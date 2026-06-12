@@ -1109,6 +1109,12 @@ async def gap_analysis_endpoint(request: Request):
     )
 
 
+@app.get("/agent-docs")
+async def agent_docs():
+    md_path = Path(__file__).parent / "agent.md"
+    return {"content": md_path.read_text(encoding="utf-8")}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html_path = Path(__file__).parent / "index.html"
