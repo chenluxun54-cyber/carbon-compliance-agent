@@ -39,6 +39,16 @@ from report_template import generate_report_html
 from memory.manager import memory_manager
 from memory.reflection import is_negative_feedback
 
+# Broader correction detection: negative complaints + explicit developer instructions
+_INSTRUCTION_PATTERNS = [
+    "你以后应该", "以后要", "下次要", "从现在开始", "记住以后",
+    "要改成", "改为", "换成", "按照以下", "格式应该", "应该格式",
+    "帮我改", "规则是", "你需要", "你必须", "应该这样做",
+]
+
+def _is_developer_correction(text: str) -> bool:
+    return is_negative_feedback(text) or any(kw in text for kw in _INSTRUCTION_PATTERNS)
+
 # ── Provider 配置 ─────────────────────────────────────────────────
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
 
@@ -103,6 +113,12 @@ def _build_memory_context(session_id: str, query: str = "") -> str:
 
 _AGENT_MD_PATH = Path(__file__).parent / "agent.md"
 _LEARNED_RULES_MARKER = "## 自主学习规则"
+
+
+def _effective_calc_prompt() -> str:
+    """CALC_SYSTEM_PROMPT + any learned rules from agent.md."""
+    extra = _read_learned_rules()
+    return CALC_SYSTEM_PROMPT + ("\n\n" + extra if extra else "")
 
 
 def _read_learned_rules() -> str:
@@ -215,6 +231,12 @@ SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询�
 - 解释政策时必须结合企业案例，帮助客户理解如何在实践中落实
 - 向特定行业企业推荐政策时，优先推荐与其行业强相关的政策
 - 使用 Markdown 格式，适当使用标题、列表让回答结构清晰
+
+【开发者纠错协议】
+当开发者在对话中指出你的回答有问题、或告诉你应该怎么做时：
+1. **立即按照指示重新给出完整的正确回答** — 不要只说"好的我记住了"或"下次会改"，当场展示改正后的结果
+2. 在重新回答之后，用一行说明：`✅ 规则已记录，后续对话永久生效。`
+3. 不需要解释为什么之前错了，直接展示正确版本
 """
 
 # ── Tool 定义 ─────────────────────────────────────────────────────
@@ -409,6 +431,10 @@ CALC_SYSTEM_PROMPT = """你是一位亲切的产品碳足迹计算助手，帮�
 【禁止行为】
 - 一次提多个问题
 - 编造数据（不确定时给参考值并在 assumptions 里标注"行业估算"）
+
+【开发者纠错协议】
+当开发者在对话中指出你的行为有问题或告诉你应该怎么做时：
+立即按照指示重新执行，直接展示改正后的结果，结尾加一行：`✅ 规则已记录，后续对话永久生效。`
 """
 
 CALC_TOOLS = [
@@ -690,7 +716,7 @@ async def _run_calc_sub_agent(session_id: str, product_hint: str):
     intro = product_hint if product_hint else "请开始帮我计算产品碳足迹。"
     messages.append({"role": "user", "content": intro})
 
-    async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
+    async for event in _calc_runner.run(messages, _effective_calc_prompt(), CALC_TOOLS):
         yield event
 
     _active_calc_session["current"] = ""
@@ -774,8 +800,8 @@ async def _maybe_extract_memories(session_id: str, user_message: str = "") -> No
             memory_extract_system=_MEMORY_EXTRACT_SYSTEM,
             user_message=user_message,
         )
-        # Self-learning: when user corrects the agent, distill a rule and write to agent.md
-        if user_message and is_negative_feedback(user_message):
+        # Self-learning: when developer corrects or instructs, write rule to agent.md
+        if user_message and _is_developer_correction(user_message):
             asyncio.create_task(_update_agent_md(session_id, user_message, msgs))
     except Exception:
         pass
@@ -798,7 +824,7 @@ async def agent_stream(session_id: str, user_message: str):
         messages.append({"role": "user", "content": user_message})
         _active_calc_session["current"] = session_id
         try:
-            async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
+            async for event in _calc_runner.run(messages, _effective_calc_prompt(), CALC_TOOLS):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
             if session_id in calc_results:
