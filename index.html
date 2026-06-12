@@ -1693,17 +1693,34 @@ function handleSSE(payload, showUser) {
       const progPanel = document.getElementById('calc-progress');
       if (progPanel) progPanel.style.display = 'none';
 
-      // Single chat bubble: download link + compliance badges inline
+      // Single chat bubble: summary + download link + compliance badges inline
       const compDivId = `comp-${sid}`;
+      const productName = payload.product_name || '产品';
+      const total = payload.total_kgco2e || 0;
+      const analogy = payload.analogy_km || 0;
+      const hotspot = payload.hotspot || '';
+      const hotspotPct = payload.hotspot_pct || 0;
+
+      const summaryHtml = total > 0 ? `
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 14px;margin-bottom:12px">
+          <div style="font-size:15px;font-weight:700;color:#14532d;margin-bottom:4px">
+            🌿 ${escHtml(productName)} · <span style="font-size:20px">${total.toFixed(3)}</span> kg CO₂e / 件
+          </div>
+          <div style="font-size:13px;color:#166534;margin-bottom:${hotspot ? '4px' : '0'}">
+            相当于驾驶普通汽车行驶 <strong>${analogy} 公里</strong> 产生的碳排放
+          </div>
+          ${hotspot ? `<div style="font-size:12px;color:#6b7280">最大排放来源：${escHtml(hotspot)}，占 ${hotspotPct}%</div>` : ''}
+        </div>` : '';
+
       const dlBubble = document.createElement('div');
       dlBubble.className = 'msg-row assistant calc-report-bubble';
       dlBubble.innerHTML = `<div class="msg-bubble">
-        ✅ 碳足迹报告已生成，含 ISO 14067 合规清单和 CBAM 合规评估。<br>
+        ${summaryHtml}
         <a href="/footprint-report/${sid}" download="carbon_footprint_report.html"
-           style="display:inline-block;margin-top:10px;padding:9px 20px;
+           style="display:inline-block;padding:9px 20px;
                   background:#16a34a;color:#fff;border-radius:8px;
                   text-decoration:none;font-size:13px;font-weight:600">
-          📥 下载碳足迹报告
+          📥 下载完整碳足迹报告
         </a>
         <div id="${compDivId}" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span style="color:#9ca3af;font-size:12px">🔍 加载合规状态...</span>

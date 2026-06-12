@@ -704,6 +704,20 @@ _runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_to
 _calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_tool, max_iterations=20, force_blocking=True)
 
 
+def _calc_complete_event(session_id: str) -> dict:
+    """Build calc_complete SSE payload with report summary for the chat bubble."""
+    result = calc_results.get(session_id, {})
+    return {
+        "type":         "calc_complete",
+        "session_id":   session_id,
+        "product_name": result.get("product_name", ""),
+        "total_kgco2e": result.get("total_kgco2e", 0),
+        "analogy_km":   result.get("analogy_km", 0),
+        "hotspot":      result.get("hotspot", ""),
+        "hotspot_pct":  result.get("hotspot_pct", 0),
+    }
+
+
 async def _run_calc_sub_agent(session_id: str, product_hint: str):
     """Run the product carbon footprint sub-agent for the first turn."""
     # Clear any previous calc result so auto-finalize can fire for the new product
@@ -725,7 +739,7 @@ async def _run_calc_sub_agent(session_id: str, product_hint: str):
         _active_calc_session["current"] = ""
 
     if session_id in calc_results:
-        yield {"type": "calc_complete", "session_id": session_id}
+        yield _calc_complete_event(session_id)
         session_states.pop(session_id, None)
         calc_data_state.pop(session_id, None)
 
@@ -854,7 +868,7 @@ async def agent_stream(session_id: str, user_message: str):
 
         # Always check after runner — fires even if LLM errored after auto_finalize succeeded
         if session_id in calc_results:
-            yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
+            yield f"data: {json.dumps(_calc_complete_event(session_id), ensure_ascii=False)}\n\n"
             session_states.pop(session_id, None)
             calc_data_state.pop(session_id, None)
         return
