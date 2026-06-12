@@ -137,12 +137,14 @@ class AgentRunner:
                                 )
                                 prog = json.loads(result_str)
                                 yield {
-                                    "type":          "progress",
-                                    "collected":     prog.get("collected", 0),
-                                    "total":         prog.get("total", 5),
-                                    "all_required":  prog.get("all_required", False),
+                                    "type":           "progress",
+                                    "collected":      prog.get("collected", 0),
+                                    "total":          prog.get("total", 5),
+                                    "all_required":   prog.get("all_required", False),
                                     "missing_labels": prog.get("missing_labels", []),
                                 }
+                                if prog.get("auto_calculated"):
+                                    yield {"type": "status", "content": "✅ 数据收集完毕，碳足迹计算完成！"}
                             except Exception as err:
                                 result_str = f"错误：{err}"
 

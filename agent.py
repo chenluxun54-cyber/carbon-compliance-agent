@@ -280,7 +280,7 @@ CALC_SYSTEM_PROMPT = """你是一位亲切的产品碳足迹计算助手，帮�
 - 每次只问一个问题
 - 用户说了什么数据，立刻调用 record_data 工具记录下来
 - record_data 返回后，在回复里告诉用户记录了什么、还缺什么
-- 当 record_data 返回 "all_required": true，立即调用 finalize_footprint，不输出任何前置文字
+- 当 record_data 返回 "auto_calculated": true，系统已自动计算完成，用 result_summary 字段的数据向用户播报结果，格式见下方【计算完成回复格式】
 
 【必填信息（5项，全部收集到才能计算）】
 - 产品名称 + 每件重量（克或千克）
@@ -299,22 +299,24 @@ CALC_SYSTEM_PROMPT = """你是一位亲切的产品碳足迹计算助手，帮�
 【用户说了一大堆信息时】
 一次性提取所有能识别的字段，全部放进一个 record_data 调用里。
 
-【回复格式（每次 record_data 后）】
-"记下了 ✅ [刚记录的内容简述]。[如果还缺必填项]还需要 N 项：[中文字段名]。[下一个问题]"
+【回复格式（每次 record_data 后，还有缺失数据时）】
+"记下了 ✅ [刚记录的内容简述]。还需要 N 项：[中文字段名]。[下一个问题]"
 如果可选项没问过，在必填项都收集完之前适时询问可选项。
+
+【计算完成回复格式（auto_calculated: true 时）】
+直接用以下模板回复（数据来自 result_summary 字段）：
+"✅ 计算完成！
+**[产品名称]** 每件碳足迹：**[total_kgco2e] kg CO₂e**
+相当于开车 [analogy_km] 公里的排放量。
+最大排放来源：[hotspot]，占 [hotspot_pct]%。
+报告已生成，点击下方按钮即可下载。"
 
 【电量参考值（用户不确定时提供）】
 轻工业品：0.3~1 度；电子产品：1~5 度；重型机械：5~50 度
 
-【finalize_footprint 参数来源】
-从 record_data 记录的数据构造参数。certification_standard 默认传空字符串，
-除非用户主动提到 ISO 14067 或 CBAM。
-
 【禁止行为】
 - 一次提多个问题
-- all_required 未为 true 就调用 finalize_footprint
 - 编造数据（不确定时给参考值并在 assumptions 里标注"行业估算"）
-- 计算前输出"请稍等""正在计算""信息收集完毕"等过渡文字
 """
 
 CALC_TOOLS = [
@@ -361,66 +363,6 @@ CALC_TOOLS = [
             }
         }
     },
-    {
-        "name": "finalize_footprint",
-        "description": "收集完所有数据后调用此工具进行碳排放计算，返回完整结果供你解释给用户。",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "product_name": {"type": "string", "description": "产品名称"},
-                "functional_unit": {"type": "string", "description": "计算基准，如 '每件（300g铝制水杯）'"},
-                "electricity_kwh": {"type": "number", "description": "生产单件产品的用电量（度）"},
-                "region": {"type": "string", "description": "工厂所在省份或地区，如 浙江、华东、全国平均"},
-                "materials": {
-                    "type": "array",
-                    "description": "原材料列表",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "kg": {"type": "number"}
-                        },
-                        "required": ["name", "kg"]
-                    }
-                },
-                "fuel_type": {"type": "string", "description": "燃料类型，如 天然气_m3、柴油_L；无则传空字符串"},
-                "fuel_quantity": {"type": "number", "description": "燃料用量；无则传0"},
-                "transport_weight_kg": {"type": "number", "description": "产品重量（kg）"},
-                "transport_distance_km": {"type": "number", "description": "运输距离（km）；无则传0"},
-                "transport_mode": {"type": "string", "description": "运输方式：公路/铁路/海运/航空"},
-                "packaging": {
-                    "type": "array",
-                    "description": "包装材料列表，无包装传空数组",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "kg": {"type": "number"}
-                        },
-                        "required": ["name", "kg"]
-                    }
-                },
-                "end_of_life_method": {
-                    "type": "string",
-                    "description": "报废处置方式：填埋/焚烧/回收/混合/堆肥；不确定传空字符串"
-                },
-                "end_of_life_recycled_pct": {
-                    "type": "number",
-                    "description": "回收比例（0-100），处置方式为混合时使用"
-                },
-                "assumptions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "本次计算中使用的假设或默认值（如有）"
-                },
-                "certification_standard": {
-                    "type": "string",
-                    "description": "目标认证标准（可选），如 'ISO 14067'、'CBAM'；不需要则传空字符串"
-                }
-            },
-            "required": ["product_name", "functional_unit", "electricity_kwh", "region", "materials"]
-        }
-    }
 ]
 
 # ── 会话存储（内存）─────────────────────────────────────────────
@@ -483,13 +425,47 @@ def execute_record_data(session_id: str, inputs: dict) -> str:
     collected = sum(required.values())
     missing_labels = [k for k, ok in required.items() if not ok]
 
-    return json.dumps({
-        "recorded":      [k for k, v in inputs.items() if k in _DEFAULTS],
-        "collected":     collected,
-        "total":         5,
-        "all_required":  collected == 5,
+    auto_result = None
+    if collected == 5 and session_id not in calc_results:
+        auto_result = _auto_finalize(session_id, state)
+
+    out: dict = {
+        "recorded":       [k for k, v in inputs.items() if k in _DEFAULTS],
+        "collected":      collected,
+        "total":          5,
+        "all_required":   collected == 5,
         "missing_labels": missing_labels,
-    }, ensure_ascii=False)
+    }
+    if auto_result:
+        out["auto_calculated"] = True
+        out["result_summary"] = auto_result
+    return json.dumps(out, ensure_ascii=False)
+
+
+def _auto_finalize(session_id: str, state: dict) -> dict | None:
+    """Build finalize_footprint inputs from accumulated state and run calculation."""
+    try:
+        total_mat_kg = sum(m.get("kg", 0) for m in state.get("materials", []))
+        merged = {
+            "product_name":              state["product_name"],
+            "functional_unit":           state.get("functional_unit") or f"每件（{state['product_name']}）",
+            "electricity_kwh":           state["electricity_kwh"],
+            "region":                    state["region"],
+            "materials":                 state["materials"],
+            "fuel_type":                 state.get("fuel_type", ""),
+            "fuel_quantity":             state.get("fuel_quantity", 0),
+            "transport_weight_kg":       total_mat_kg,
+            "transport_distance_km":     state.get("transport_distance_km", 0),
+            "transport_mode":            state.get("transport_mode", "公路"),
+            "packaging":                 state.get("packaging", []),
+            "end_of_life_method":        state.get("end_of_life_method", ""),
+            "end_of_life_recycled_pct":  state.get("recycled_pct", 0),
+            "assumptions":               [],
+        }
+        result_json = execute_finalize_footprint(merged)
+        return json.loads(result_json)
+    except Exception:
+        return None
 
 
 def execute_search_policies(keyword: str = None, industry: str = None, jurisdiction: str = None) -> str:
