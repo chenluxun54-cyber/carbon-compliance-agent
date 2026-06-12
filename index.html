@@ -505,6 +505,27 @@
     .cb-clear   { background: #f0fdf4; color: #166534; }
     .cb-unknown { background: #f3f4f6; color: #6b7280; }
 
+    /* Calc progress tracker */
+    #calc-progress {
+      margin: 0 0 8px; padding: 10px 16px;
+      background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px;
+      font-size: 13px; color: #166534;
+    }
+    #calc-progress .prog-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+    }
+    #calc-progress .prog-title { font-weight: 600; }
+    #calc-progress .prog-count { color: #6b7280; font-size: 12px; }
+    #calc-progress .prog-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .prog-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      background: #e5e7eb; color: #6b7280; transition: background 0.3s, color 0.3s;
+    }
+    .prog-chip.done { background: #dcfce7; color: #14532d; }
+    @keyframes chip-pop { 0%{transform:scale(1)} 50%{transform:scale(1.15)} 100%{transform:scale(1)} }
+    .prog-chip.pop { animation: chip-pop 0.3s ease; }
+
     .cursor-blink {
       display: inline-block; width: 2px; height: 1em;
       background: var(--green); vertical-align: text-bottom;
@@ -815,6 +836,21 @@
             </div>
           </div>
         </div>
+        <!-- Calc progress tracker (shown during product footprint calculation) -->
+        <div id="calc-progress" style="display:none">
+          <div class="prog-header">
+            <span class="prog-title">🌿 产品碳足迹 — 数据收集进度</span>
+            <span class="prog-count" id="prog-count-text">0 / 5 项必要数据</span>
+          </div>
+          <div class="prog-chips">
+            <span class="prog-chip" id="prog-产品名称">⬜ 产品名称</span>
+            <span class="prog-chip" id="prog-重量">⬜ 重量</span>
+            <span class="prog-chip" id="prog-工厂地区">⬜ 工厂地区</span>
+            <span class="prog-chip" id="prog-生产用电量">⬜ 用电量</span>
+            <span class="prog-chip" id="prog-主要原材料">⬜ 原材料</span>
+          </div>
+        </div>
+
         <div id="chat-input-area">
           <div id="chat-input-wrap">
             <textarea id="chat-input" placeholder="向双碳顾问提问…" rows="1"
@@ -1313,6 +1349,7 @@ async function selectSession(sid) {
   if (sid === sessionId || isStreaming) return;
   sessionId = sid;
   localStorage.setItem('carbon_session_id', sessionId);
+  resetCalcProgress();
   // Restore in backend memory
   await fetch(`${API}/new_session`, {
     method: 'POST',
@@ -1335,6 +1372,17 @@ async function selectSession(sid) {
   });
 }
 
+function resetCalcProgress() {
+  const panel = document.getElementById('calc-progress');
+  if (!panel) return;
+  panel.style.display = 'none';
+  document.getElementById('prog-count-text').textContent = '0 / 5 项必要数据';
+  ['产品名称','重量','工厂地区','生产用电量','主要原材料'].forEach(f => {
+    const chip = document.getElementById(`prog-${f}`);
+    if (chip) { chip.className = 'prog-chip'; chip.textContent = `⬜ ${f}`; }
+  });
+}
+
 async function createNewSession() {
   if (isStreaming) return;
   const res = await fetch(`${API}/new_session`, {
@@ -1343,6 +1391,7 @@ async function createNewSession() {
   const d   = await res.json();
   sessionId = d.session_id;
   localStorage.setItem('carbon_session_id', sessionId);
+  resetCalcProgress();
   // Clear chat UI + restore chips
   const msgs = document.getElementById('chat-messages');
   msgs.innerHTML = '';
@@ -1605,8 +1654,39 @@ function handleSSE(payload, showUser) {
       chatScrollDown();
       loadSessionList(); // pick up auto-generated name
       break;
+    case 'progress': {
+      const panel = document.getElementById('calc-progress');
+      if (panel) {
+        panel.style.display = 'block';
+        const collected = payload.collected || 0;
+        const total = payload.total || 5;
+        document.getElementById('prog-count-text').textContent = `${collected} / ${total} 项必要数据`;
+        const missing = new Set(payload.missing_labels || []);
+        const allFields = ['产品名称','重量','工厂地区','生产用电量','主要原材料'];
+        allFields.forEach(f => {
+          const chip = document.getElementById(`prog-${f}`);
+          if (!chip) return;
+          const isDone = !missing.has(f);
+          if (isDone && !chip.classList.contains('done')) {
+            chip.classList.add('done');
+            chip.textContent = `✅ ${f}`;
+            chip.classList.remove('pop');
+            void chip.offsetWidth; // force reflow
+            chip.classList.add('pop');
+            setTimeout(() => chip.classList.remove('pop'), 350);
+          } else if (!isDone && chip.classList.contains('done')) {
+            chip.classList.remove('done');
+            chip.textContent = `⬜ ${f}`;
+          }
+        });
+      }
+      break;
+    }
     case 'calc_complete': {
       const sid = payload.session_id;
+      // Hide progress tracker
+      const progPanel = document.getElementById('calc-progress');
+      if (progPanel) progPanel.style.display = 'none';
       document.querySelectorAll('.report-download-banner, .compliance-row').forEach(e => e.remove());
 
       // Compliance status row (populated by fetch below)

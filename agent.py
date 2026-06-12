@@ -273,80 +273,94 @@ GAP_ANALYSIS_SYSTEM_PROMPT = """你是一位资深双碳合规顾问，专门为
 """
 
 # ── Sub-agent: 产品碳足迹计算 ────────────────────────────────────
-CALC_SYSTEM_PROMPT = """你是一位专业的产品碳足迹计算顾问，帮助制造业企业计算单个产品的碳排放量。
+CALC_SYSTEM_PROMPT = """你是一位亲切的产品碳足迹计算助手，帮用户算清楚一件产品从生产到报废的碳排放量。
 
-你通过对话逐步收集所需数据，然后调用 finalize_footprint 工具输出计算结果。
+【工作方式】
+- 全程用简单日常语言，不说"范围一""排放因子""LCA"等专业术语
+- 每次只问一个问题
+- 用户说了什么数据，立刻调用 record_data 工具记录下来
+- record_data 返回后，在回复里告诉用户记录了什么、还缺什么
+- 当 record_data 返回 "all_required": true，立即调用 finalize_footprint，不输出任何前置文字
 
-【核心原则】
-必须按顺序走完全部8个步骤，每步都要主动提问。只有在完成第8步之后，才能调用 finalize_footprint。
-无需征求用户同意，无需提问"是否开始计算"。
+【必填信息（5项，全部收集到才能计算）】
+- 产品名称 + 每件重量（克或千克）
+- 工厂所在省份/地区（不同省电网碳排放不同）
+- 生产一件产品用多少度电
+- 主要原材料和各自重量（千克）
+  可识别材料：钢铁、铝、铜、锌、镍、塑料（PP/PE/ABS/PET/PC/PVC/PA/PU）、
+  玻璃、纸板、木材、PCB、锂电池、碳纤维、橡胶、陶瓷、涤纶、羊毛、皮革等
 
-【对话规则 — 严格遵守】
-1. 每次只问一个问题，绝不同时提多个问题
-2. 每个问题说明为什么需要这个信息（1句话即可）
-3. 用户不知道某数据时，给出行业参考值供其选择，最终报告中标注"行业估算"
-4. 可选步骤的跳过权归用户：用户回答"没有"/"不确定"/"跳过"时才跳到下一步；你不能主动替用户跳过
-5. 全程不使用专业术语（不说"范围一""排放因子""LCA"等）
+【可选信息（用户回答"不知道"/"没有"/"跳过"就跳过，不要催）】
+- 生产时用天然气/柴油/煤吗
+- 产品发货距离和运输方式（公路/铁路/海运）
+- 外包装材料和重量（瓦楞纸箱、PE薄膜、泡沫塑料等）
+- 产品报废后怎么处理（填埋/焚烧/回收）
 
-【数据收集步骤 — 必须全部走完】
+【用户说了一大堆信息时】
+一次性提取所有能识别的字段，全部放进一个 record_data 调用里。
 
-第1步（必填）：产品 + 重量
-→ ask_client："您想计算哪款产品的碳排放？单个产品大概多重（克或千克）？"
+【回复格式（每次 record_data 后）】
+"记下了 ✅ [刚记录的内容简述]。[如果还缺必填项]还需要 N 项：[中文字段名]。[下一个问题]"
+如果可选项没问过，在必填项都收集完之前适时询问可选项。
 
-第2步（必填）：工厂所在省份
-→ ask_client："工厂在哪个省份或地区？"
-  （原因：不同地区电网排放因子不同）
+【电量参考值（用户不确定时提供）】
+轻工业品：0.3~1 度；电子产品：1~5 度；重型机械：5~50 度
 
-第3步（必填）：生产用电量
-→ ask_client："生产一件这样的产品，大概需要多少度电？"
-  参考值：轻工产品 0.3-1度；电子产品 1-5度；重型机械 5-50度
-
-第4步（必填）：主要原材料
-→ ask_client："产品主要用了哪些材料？各用多少千克？"
-  可识别材料：钢铁、铝（含再生铝）、铜、锌、镍、塑料（PP/PE/ABS/PET/PC/PVC/PA/PU）、玻璃、纸板、木材、PCB电路板、锂电池、碳纤维、玻璃纤维、橡胶、陶瓷、涤纶、羊毛、皮革等45种
-
-第5步（可选）：直接燃料
-→ ask_client："生产过程中有用到天然气、柴油或煤炭吗？如果没有，请直接说没有。"
-  用户说没有/不确定 → fuel传0，继续第6步
-
-第6步（可选）：运输
-→ ask_client："产品送到客户通常多远？用什么运输方式（公路/铁路/海运）？如不确定请说跳过。"
-  用户说不确定/跳过 → distance传0，继续第7步
-
-第7步（可选）：外包装
-→ ask_client："产品有外包装吗？是什么材料，大概多重？如果没有请说没有。"
-  可识别包装：瓦楞纸箱、PE薄膜、泡沫塑料、铝箔、玻璃瓶、铁罐
-  用户说没有 → 传空数组，继续第8步
-
-第8步（可选）：报废处置
-→ ask_client："这款产品报废后通常怎么处理？是填埋、焚烧还是回收？如不确定请说跳过。"
-  用户说不确定/跳过 → 传空字符串
-
-【第8步完成后 — 数据核查并计算】
-走完第8步后，在内部检查必填字段：
-  ✅ 产品名称和重量（功能单位）
-  ✅ 工厂省份/地区
-  ✅ 生产用电量（度）
-  ✅ 至少一种原材料及用量（千克）
-
-如有必填字段缺失，用 ask_client 补问，再调用 finalize_footprint。
-所有必填字段齐全后，直接调用 finalize_footprint，不输出任何前置文字。
-
-certification_standard 默认传空字符串，除非用户主动提到 ISO 14067 或 CBAM。
-
-【处理用户已提供信息的情况】
-如果用户已提供了某步骤的信息，跳过对应步骤，直接询问下一个未知步骤。
+【finalize_footprint 参数来源】
+从 record_data 记录的数据构造参数。certification_standard 默认传空字符串，
+除非用户主动提到 ISO 14067 或 CBAM。
 
 【禁止行为】
-- 一次问多个问题
-- 未走完8步就调用 finalize_footprint（除非用户已主动提供了所有信息）
-- 自行决定替用户跳过可选步骤（必须让用户自己说跳过）
+- 一次提多个问题
+- all_required 未为 true 就调用 finalize_footprint
+- 编造数据（不确定时给参考值并在 assumptions 里标注"行业估算"）
 - 计算前输出"请稍等""正在计算""信息收集完毕"等过渡文字
-- 编造数据（不确定时使用参考值并标注"行业估算"）
 """
 
 CALC_TOOLS = [
-    _ASK_CLIENT_TOOL,
+    {
+        "name": "record_data",
+        "description": "用户提供了任何碳足迹计算数据时立即调用，记录已收集的字段并返回当前进度。可同时传入多个字段。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "product_name":           {"type": "string",  "description": "产品名称"},
+                "weight_kg":              {"type": "number",  "description": "每件重量（千克）"},
+                "region":                 {"type": "string",  "description": "工厂所在省份或地区"},
+                "electricity_kwh":        {"type": "number",  "description": "生产一件产品用电量（度）"},
+                "materials": {
+                    "type": "array",
+                    "description": "原材料列表",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "kg":   {"type": "number"}
+                        },
+                        "required": ["name", "kg"]
+                    }
+                },
+                "fuel_type":              {"type": "string",  "description": "燃料类型，如 天然气_m3、柴油_L"},
+                "fuel_quantity":          {"type": "number",  "description": "燃料用量"},
+                "transport_distance_km":  {"type": "number",  "description": "运输距离（千米）"},
+                "transport_mode":         {"type": "string",  "description": "运输方式：公路/铁路/海运/航空"},
+                "packaging": {
+                    "type": "array",
+                    "description": "包装材料列表",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "kg":   {"type": "number"}
+                        },
+                        "required": ["name", "kg"]
+                    }
+                },
+                "end_of_life_method":     {"type": "string",  "description": "报废处置方式：填埋/焚烧/回收/混合/堆肥"},
+                "recycled_pct":           {"type": "number",  "description": "回收比例 0-100，处置方式为混合时使用"}
+            }
+        }
+    },
     {
         "name": "finalize_footprint",
         "description": "收集完所有数据后调用此工具进行碳排放计算，返回完整结果供你解释给用户。",
@@ -419,12 +433,63 @@ _sub_agent_pending: dict[str, dict] = {}
 calc_results: dict[str, dict] = {}
 # Active session_id being processed by the calc sub-agent (for result storage)
 _active_calc_session: dict[str, str] = {"current": ""}
+# Accumulated data state per calc session
+calc_data_state: dict[str, dict] = {}
 
 
 def execute_carbon_score(company_id: str, report_year: int) -> str:
     data = _loader.fetch(company_id, report_year)
     result = _scorer.score(data)
     return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+def execute_record_data(session_id: str, inputs: dict) -> str:
+    """Accumulate calc fields into session state, return progress JSON."""
+    _DEFAULTS = {
+        "product_name": "", "weight_kg": 0.0, "region": "",
+        "electricity_kwh": 0.0, "materials": [],
+        "fuel_type": "", "fuel_quantity": 0.0,
+        "transport_distance_km": 0.0, "transport_mode": "公路",
+        "packaging": [], "end_of_life_method": "", "recycled_pct": 0.0,
+    }
+    state = calc_data_state.setdefault(session_id, dict(_DEFAULTS))
+
+    for k, v in inputs.items():
+        if k not in _DEFAULTS:
+            continue
+        if k in ("materials", "packaging"):
+            if v:
+                existing = {m["name"] for m in state[k]}
+                for item in v:
+                    if item.get("name") and item["name"] not in existing:
+                        state[k].append(item)
+                        existing.add(item["name"])
+        elif v is not None and v != "" and v != 0 and v != 0.0:
+            state[k] = v
+
+    # Auto-derive functional_unit for finalize_footprint
+    if state["product_name"] and state["weight_kg"] and not state.get("functional_unit"):
+        w = state["weight_kg"]
+        label = f"{w*1000:.0f}g" if w < 1 else f"{w:.2f}kg".rstrip("0").rstrip(".")
+        state["functional_unit"] = f"每件（{label} {state['product_name']}）"
+
+    required = {
+        "产品名称": bool(state["product_name"]),
+        "重量":     state["weight_kg"] > 0,
+        "工厂地区": bool(state["region"]),
+        "生产用电量": state["electricity_kwh"] > 0,
+        "主要原材料": len(state["materials"]) > 0,
+    }
+    collected = sum(required.values())
+    missing_labels = [k for k, ok in required.items() if not ok]
+
+    return json.dumps({
+        "recorded":      [k for k, v in inputs.items() if k in _DEFAULTS],
+        "collected":     collected,
+        "total":         5,
+        "all_required":  collected == 5,
+        "missing_labels": missing_labels,
+    }, ensure_ascii=False)
 
 
 def execute_search_policies(keyword: str = None, industry: str = None, jurisdiction: str = None) -> str:
@@ -522,8 +587,20 @@ def execute_tool(tool_name: str, inputs: dict) -> str:
         )
     elif tool_name == "get_policy_detail":
         return execute_get_policy_detail(inputs["policy_id"])
+    elif tool_name == "record_data":
+        sid = _active_calc_session.get("current", "")
+        return execute_record_data(sid, inputs)
     elif tool_name == "finalize_footprint":
-        return execute_finalize_footprint(inputs)
+        # Fill any missing optional fields from calc_data_state
+        sid = _active_calc_session.get("current", "")
+        state = calc_data_state.get(sid, {})
+        merged = dict(inputs)
+        for k in ("region", "fuel_type", "fuel_quantity", "transport_distance_km",
+                  "transport_mode", "packaging", "end_of_life_method", "recycled_pct",
+                  "functional_unit"):
+            if not merged.get(k) and state.get(k):
+                merged[k] = state[k]
+        return execute_finalize_footprint(merged)
     elif tool_name == "start_product_calc":
         # Sentinel: agent_stream() detects this and switches to calc sub-agent
         return json.dumps({"__sub_agent__": "calc", "product_hint": inputs.get("product_hint", "")})
@@ -536,28 +613,21 @@ _calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execu
 
 
 async def _run_calc_sub_agent(session_id: str, product_hint: str):
-    """Run the product carbon footprint sub-agent on the session."""
+    """Run the product carbon footprint sub-agent for the first turn."""
     _active_calc_session["current"] = session_id
     messages = sessions[session_id]
-    if product_hint:
-        messages.append({"role": "user", "content": product_hint})
-    else:
-        messages.append({"role": "user", "content": "请开始收集产品碳足迹计算所需的信息。"})
+    intro = product_hint if product_hint else "请开始帮我计算产品碳足迹。"
+    messages.append({"role": "user", "content": intro})
 
-    calc_done = False
     async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
         yield event
-        # Detect if finalize_footprint was called (result stored in calc_results)
-        if not calc_done and session_id in calc_results:
-            calc_done = True
 
     _active_calc_session["current"] = ""
 
-    # If calc completed (not just paused for ask_client), yield the download event
-    if calc_done and session_id in calc_results:
+    if session_id in calc_results:
         yield {"type": "calc_complete", "session_id": session_id}
         session_states.pop(session_id, None)
-    # else: paused for ask_client — stay in calc mode for next user message
+        calc_data_state.pop(session_id, None)
 
 
 async def _persist(session_id: str) -> None:
@@ -652,44 +722,22 @@ async def agent_stream(session_id: str, user_message: str):
     # Route to calc sub-agent if session is in calc mode
     if session_states.get(session_id) == "calc":
         messages.append({"role": "user", "content": user_message})
+        _active_calc_session["current"] = session_id
         try:
-            _active_calc_session["current"] = session_id
+            async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-            # Buffered loop: suppress announcement text and auto-continue (max 2 retries)
-            for _attempt in range(3):
-                buffered = []
-                asked_client = False
-
-                async for event in _calc_runner.run(messages, CALC_SYSTEM_PROMPT, CALC_TOOLS):
-                    buffered.append(event)
-                    if event.get("type") == "ask_client":
-                        asked_client = True
-
-                calc_done = session_id in calc_results
-
-                if calc_done or asked_client:
-                    # Normal outcome — flush buffered events to client
-                    for ev in buffered:
-                        yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                    if calc_done:
-                        yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
-                        session_states.pop(session_id, None)
-                    break
-                else:
-                    # Text-only (no tool call) — suppress and nudge to use a tool
-                    messages.append({
-                        "role": "user",
-                        "content": "[系统提示] 请继续：用 ask_client 提问下一个步骤，或在全部8步完成后调用 finalize_footprint。不要输出纯文字。",
-                    })
-
-            _active_calc_session["current"] = ""
+            if session_id in calc_results:
+                yield f"data: {json.dumps({'type': 'calc_complete', 'session_id': session_id})}\n\n"
+                session_states.pop(session_id, None)
+                calc_data_state.pop(session_id, None)
         except Exception as e:
-            _active_calc_session["current"] = ""
             err_msg = str(e)
             if "authentication" in err_msg.lower() or "401" in err_msg:
                 err_msg = "API Key 无效，请检查环境变量后重启服务。"
             yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
         finally:
+            _active_calc_session["current"] = ""
             await _persist(session_id)
             asyncio.create_task(_maybe_auto_name(session_id))
             asyncio.create_task(_maybe_extract_memories(session_id, user_message))
@@ -929,6 +977,7 @@ async def delete_session_endpoint(session_id: str):
     sessions.pop(session_id, None)
     session_states.pop(session_id, None)
     calc_results.pop(session_id, None)
+    calc_data_state.pop(session_id, None)
     return {"deleted": session_id}
 
 

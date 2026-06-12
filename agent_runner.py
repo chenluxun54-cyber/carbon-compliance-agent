@@ -21,6 +21,7 @@ _STATUS_MSGS: dict[str, str] = {
     "ask_client":          "❓ 需要向客户确认信息…",
     "start_product_calc":  "🧮 正在启动产品碳足迹计算…",
     "finalize_footprint":  "⚙️ 正在计算碳排放量…",
+    "record_data":         "📝 记录数据…",
 }
 
 # Only show "数据获取完成" when real user-data is retrieved or calculated
@@ -126,6 +127,30 @@ class AgentRunner:
                                 "content":     "问题已发送给客户，等待回答。",
                             })
                             asked_client = True
+
+                        elif block.name == "record_data":
+                            _block = block
+                            try:
+                                result_str = await asyncio.get_event_loop().run_in_executor(
+                                    None,
+                                    lambda: self.execute_tool(_block.name, _block.input),
+                                )
+                                prog = json.loads(result_str)
+                                yield {
+                                    "type":          "progress",
+                                    "collected":     prog.get("collected", 0),
+                                    "total":         prog.get("total", 5),
+                                    "all_required":  prog.get("all_required", False),
+                                    "missing_labels": prog.get("missing_labels", []),
+                                }
+                            except Exception as err:
+                                result_str = f"错误：{err}"
+
+                            tool_results.append({
+                                "type":        "tool_result",
+                                "tool_use_id": block.id,
+                                "content":     result_str,
+                            })
 
                         else:
                             _block = block
