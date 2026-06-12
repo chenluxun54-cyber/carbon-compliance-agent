@@ -1687,19 +1687,27 @@ function handleSSE(payload, showUser) {
       // Hide progress tracker
       const progPanel = document.getElementById('calc-progress');
       if (progPanel) progPanel.style.display = 'none';
-      document.querySelectorAll('.report-download-banner, .compliance-row').forEach(e => e.remove());
+      document.querySelectorAll('.calc-report-bubble, .compliance-row').forEach(e => e.remove());
+
+      // Assistant bubble with download link
+      const dlBubble = document.createElement('div');
+      dlBubble.className = 'msg-row assistant calc-report-bubble';
+      dlBubble.innerHTML = `<div class="msg-bubble">
+        ✅ 碳足迹报告已生成，含 ISO 14067 合规清单和 CBAM 合规评估。<br>
+        <a href="/footprint-report/${sid}" download="carbon_footprint_report.html"
+           style="display:inline-block;margin-top:10px;padding:9px 20px;
+                  background:#16a34a;color:#fff;border-radius:8px;
+                  text-decoration:none;font-size:13px;font-weight:600">
+          📥 下载碳足迹报告
+        </a>
+      </div>`;
+      document.getElementById('chat-messages').appendChild(dlBubble);
 
       // Compliance status row (populated by fetch below)
       const compRow = document.createElement('div');
       compRow.className = 'compliance-row';
       compRow.innerHTML = '<span style="color:#9ca3af">🔍 加载合规状态...</span>';
       document.getElementById('chat-messages').appendChild(compRow);
-
-      // Download banner
-      const banner = document.createElement('div');
-      banner.className = 'report-download-banner';
-      banner.innerHTML = `<span>📄 计算完成，报告含 ISO 14067 合规检查 + CBAM 评估</span><button onclick="window.open('/footprint-report/${sid}')">下载合规报告</button>`;
-      document.getElementById('chat-messages').appendChild(banner);
       chatScrollDown();
 
       // Fetch compliance JSON and update the row
