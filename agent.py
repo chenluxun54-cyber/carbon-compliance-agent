@@ -9,7 +9,9 @@ MODEL_PROVIDER=minimax    → MiniMax（Anthropic-compatible endpoint）
 import json
 import logging
 import os
+import re
 import sys
+import time
 import uuid
 import asyncio
 from datetime import date
@@ -28,6 +30,7 @@ from agent_runner import AgentRunner
 os.chdir(Path(__file__).parent)
 sys.path.insert(0, str(Path(__file__).parent))
 
+from test_logger import logger as _test_logger
 from data_loader import DataLoader
 from scorer import CarbonScorer
 from policies import POLICIES
@@ -203,17 +206,14 @@ SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询�
 2. 使用 carbon_score 工具查询数据库中企业的碳表现评分
 3. 使用 search_policies 工具搜索全球碳政策库
 4. 使用 get_policy_detail 工具获取政策详情和企业合规案例
-5. 使用 start_product_calc 工具启动产品碳足迹计算，帮助用户计算单个产品的碳排放量
-
-【start_product_calc 工具使用时机】
-- 用户想计算某个产品的碳排放/碳足迹时，立即调用此工具
-- 如果用户已经提供了产品描述，将其作为 product_hint 传入
-- 调用后会启动专门的计算子智能体接管对话
-
-【carbon_score 工具使用时机】
-- 用户明确询问某企业的碳评分、碳表现、碳数据时
-- 用户提供了企业ID（格式：COMP_XXX）时
-- 如果用户未提供企业ID或年度，请先询问
+        5. 使用 start_product_calc 工具启动产品碳足迹计算，帮助用户计算单个产品的碳排放量
+        【start_product_calc 工具使用时机】
+        - 用户想计算某个产品的碳排放/碳足迹时，立即调用此工具
+        - 如果用户已经提供了产品描述，将其作为 product_hint 传入
+        - 调用后会启动专门的计算子智能体接管对话
+        - ⚠️ 每次只调用一次，调用后立刻停止生成，等待子智能体接管
+        - 用户说"再算一个""换个产品""算另一个"等，也要调用 start_product_calc，不要直接输出 record_data 代码
+        - 绝不在回复文本中写出 record_data 或任何工具调用代码
 - 数据库中可用企业ID：COMP_001 ~ COMP_010，年度：2024
 
 【search_policies 工具使用时机】
@@ -482,6 +482,62 @@ def execute_carbon_score(company_id: str, report_year: int) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
+_PROVINCES = {
+    "广东", "浙江", "江苏", "北京", "上海", "四川", "湖北", "湖南", "山东", "河南",
+    "河北", "安徽", "福建", "辽宁", "黑龙江", "吉林", "内蒙古", "新疆", "西藏",
+    "云南", "贵州", "广西", "海南", "重庆", "天津", "陕西", "山西", "江西", "甘肃",
+    "宁夏", "青海",
+}
+
+
+def _pre_extract_from_message(session_id: str, user_message: str) -> None:
+    """Parse user message for data fields and pre-populate calc state.
+
+    MiniMax's sub-agent sometimes outputs acknowledgment text without calling
+    record_data. This runs before the LLM to ensure data is stored regardless.
+    """
+    state = calc_data_state.get(session_id, {})
+    extracted = {}
+
+    # Weight: "重50克" / "每个瓶子重50克"
+    if not state.get("weight_kg"):
+        m = re.search(r'(?:重|每[件个只瓶杯箱])\s*(\d+(?:\.\d+)?)\s*克', user_message)
+        if m:
+            extracted["weight_kg"] = float(m.group(1)) / 1000
+        else:
+            m = re.search(r'(?:重|每[件个只瓶杯箱])\s*(\d+(?:\.\d+)?)\s*千克', user_message)
+            if m:
+                extracted["weight_kg"] = float(m.group(1))
+
+    # Region: any Chinese province name followed by 工厂/厂/地
+    if not state.get("region"):
+        for province in _PROVINCES:
+            if province in user_message:
+                extracted["region"] = province
+                break
+
+    # Electricity: "用0.15度电" / "0.15度电"
+    if not (state.get("electricity_kwh", 0) > 0):
+        m = re.search(r'(?:用|耗|消耗)?\s*(\d+(?:\.\d+)?)\s*度电', user_message)
+        if m:
+            extracted["electricity_kwh"] = float(m.group(1))
+
+    # Materials: "材料就是PP塑料0.05千克"
+    if not state.get("materials"):
+        m = re.search(
+            r'(?:材料|原料)[是就为的\s]*([^\d，,。\n]+?)\s*(\d+(?:\.\d+)?)\s*千克',
+            user_message,
+        )
+        if m:
+            mat_name = m.group(1).strip().rstrip("是就为的 \t")
+            mat_kg = float(m.group(2))
+            if mat_name:
+                extracted["materials_str"] = f"{mat_name}:{mat_kg}"
+
+    if extracted:
+        execute_record_data(session_id, extracted)
+
+
 def _parse_item_str(s: str) -> list:
     """Parse 'material:kg,material:kg' string into [{name, kg}, ...] list."""
     items = []
@@ -694,14 +750,38 @@ def execute_tool(tool_name: str, inputs: dict) -> str:
                 merged[k] = state[k]
         return execute_finalize_footprint(merged)
     elif tool_name == "start_product_calc":
+        # Prevent duplicate triggers in the same session
+        sid = _active_calc_session.get("current", "")
+        if sid and session_states.get(sid) == "calc":
+            return json.dumps({"error": "产品碳足迹计算已在进行中，请勿重复调用"})
         # Sentinel: agent_stream() detects this and switches to calc sub-agent
         return json.dumps({"__sub_agent__": "calc", "product_hint": inputs.get("product_hint", "")})
     return json.dumps({"error": f"未知工具: {tool_name}"})
 
 
+def _execute_tool_logged(tool_name: str, inputs: dict) -> str:
+    """Wrapper that records every tool call to testing_log.md."""
+    _t0 = time.monotonic()
+    _result = ""
+    _error = ""
+    _success = True
+    try:
+        _result = execute_tool(tool_name, inputs)
+        return _result
+    except Exception as _exc:
+        _success = False
+        _error = str(_exc)
+        raise
+    finally:
+        _test_logger.log_tool_call(
+            tool_name, inputs, _result,
+            time.monotonic() - _t0, _success, _error,
+        )
+
+
 # ── AgentRunner 单例（依赖 execute_tool，须在其后定义）──────────
-_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_tool)
-_calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=execute_tool, max_iterations=20, force_blocking=True)
+_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=_execute_tool_logged)
+_calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=_execute_tool_logged, max_iterations=20, force_blocking=True)
 
 
 def _calc_complete_event(session_id: str) -> dict:
@@ -726,6 +806,15 @@ async def _run_calc_sub_agent(session_id: str, product_hint: str):
     yield {"type": "calc_start"}
 
     _active_calc_session["current"] = session_id
+
+    # Pre-populate product_name from hint so multi-turn flows don't lose it.
+    # The LLM often omits product_name in subsequent record_data calls assuming
+    # it was already saved, which prevents auto-calc from reaching collected=5.
+    if product_hint:
+        first_part = re.split(r'[，,、。\n]', product_hint.strip())[0].strip()
+        if first_part:
+            execute_record_data(session_id, {"product_name": first_part[:50]})
+
     messages = sessions[session_id]
     intro = product_hint if product_hint else "请开始帮我计算产品碳足迹。"
     messages.append({"role": "user", "content": intro})
@@ -847,21 +936,29 @@ async def agent_stream(session_id: str, user_message: str):
         sessions[session_id] = []
 
     messages = sessions[session_id]
+    _test_logger.start_session(user_message)
 
     # Route to calc sub-agent if session is in calc mode
     if session_states.get(session_id) == "calc":
         messages.append({"role": "user", "content": user_message})
+        # Pre-extract data fields so calc state is populated even when MiniMax
+        # outputs acknowledgment text instead of calling record_data via tool API.
+        _pre_extract_from_message(session_id, user_message)
         _active_calc_session["current"] = session_id
         try:
             async for event in _calc_runner.run(messages, _effective_calc_prompt(), CALC_TOOLS):
+                if isinstance(event, dict) and event.get("type") == "token":
+                    _test_logger.accumulate_token(event.get("content", ""))
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
+            _test_logger.log_exception(e)
             err_msg = str(e)
             if "authentication" in err_msg.lower() or "401" in err_msg:
                 err_msg = "API Key 无效，请检查环境变量后重启服务。"
             yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
         finally:
             _active_calc_session["current"] = ""
+            _test_logger.end_session()
             await _persist(session_id)
             asyncio.create_task(_maybe_auto_name(session_id))
             asyncio.create_task(_maybe_extract_memories(session_id, user_message))
@@ -904,19 +1001,25 @@ async def agent_stream(session_id: str, user_message: str):
                                     break
                             except (json.JSONDecodeError, TypeError, AttributeError):
                                 pass
+            if isinstance(event, dict) and event.get("type") == "token":
+                _test_logger.accumulate_token(event.get("content", ""))
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
         if sub_agent_triggered:
             yield f"data: {json.dumps({'type': 'status', 'content': '🧮 启动产品碳足迹计算...'})}\n\n"
             async for event in _run_calc_sub_agent(session_id, hint):
+                if isinstance(event, dict) and event.get("type") == "token":
+                    _test_logger.accumulate_token(event.get("content", ""))
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     except Exception as e:
+        _test_logger.log_exception(e)
         err_msg = str(e)
         if "authentication" in err_msg.lower() or "401" in err_msg:
             err_msg = "API Key 无效，请检查环境变量后重启服务。"
         yield f"data: {json.dumps({'type': 'error', 'content': err_msg})}\n\n"
     finally:
+        _test_logger.end_session()
         await _persist(session_id)
         asyncio.create_task(_maybe_auto_name(session_id))
         asyncio.create_task(_maybe_extract_memories(session_id, user_message))

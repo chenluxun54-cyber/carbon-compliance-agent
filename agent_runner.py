@@ -11,7 +11,38 @@ Yields event dicts that callers convert to SSE, print, or assert against.
 
 import asyncio
 import json
+import re
 from typing import AsyncGenerator, Callable
+
+
+def _extract_ts_record_data(text: str):
+    """Parse MiniMax TypeScript-style tool calls from text response.
+
+    MiniMax sometimes outputs `functions.record_data({...})` as a code block
+    instead of using the tool-use API. This extracts the args so we can call
+    the tool ourselves.
+    """
+    m = re.search(r'functions\.record_data\((\{.*?\})\)', text, re.DOTALL)
+    if not m:
+        return None
+    args_str = m.group(1)
+    # Quote unquoted JS object keys: { key: "v" } → { "key": "v" }
+    args_str = re.sub(r'([{,]\s*)([A-Za-z_]\w*)(\s*:)', r'\1"\2"\3', args_str)
+    try:
+        return json.loads(args_str)
+    except (json.JSONDecodeError, Exception):
+        return None
+
+
+def _strip_ts_tool_calls(text: str) -> str:
+    """Remove TypeScript function-call code blocks from text before showing to user."""
+    cleaned = re.sub(
+        r'```(?:typescript)?\s*\nfunctions\.\w+\(.*?\)\s*\n```',
+        '', text, flags=re.DOTALL,
+    )
+    # Also strip bare (non-fenced) typescript tool calls
+    cleaned = re.sub(r'```typescript\s*functions\.record_data\(.*?\)\s*```', '', cleaned, flags=re.DOTALL)
+    return cleaned.strip()
 
 
 _STATUS_MSGS: dict[str, str] = {
@@ -36,21 +67,27 @@ class AgentRunner:
         execute_tool: Callable[[str, dict], str],
         max_iterations: int = 10,
         force_blocking: bool = False,
+        tool_choice: dict = None,
     ):
         self.client = client
         self.model = model
         self.execute_tool = execute_tool
         self.max_iterations = max_iterations
         self.force_blocking = force_blocking
+        self.tool_choice = tool_choice
 
     async def _call_streaming(self, messages, system_prompt, tools):
         """First call: stream tokens as they arrive."""
+        kwargs = {}
+        if self.tool_choice:
+            kwargs["tool_choice"] = self.tool_choice
         async with self.client.messages.stream(
             model=self.model,
             max_tokens=4096,
             system=system_prompt,
             tools=tools,
             messages=messages,
+            **kwargs,
         ) as stream:
             async for event in stream:
                 etype = getattr(event, "type", None)
@@ -72,17 +109,23 @@ class AgentRunner:
 
     async def _call_blocking(self, messages, system_prompt, tools):
         """Follow-up calls: non-streaming create() — more reliable with tool results."""
+        kwargs = {}
+        if self.tool_choice:
+            kwargs["tool_choice"] = self.tool_choice
         response = await self.client.messages.create(
             model=self.model,
             max_tokens=4096,
             system=system_prompt,
             tools=tools,
             messages=messages,
+            **kwargs,
         )
-        # Yield any text content token-by-token for consistent UX
+        # Yield text tokens, stripping any TypeScript tool-call code blocks
         for block in response.content:
             if block.type == "text" and block.text:
-                yield {"type": "token", "content": block.text}
+                clean = _strip_ts_tool_calls(block.text)
+                if clean:
+                    yield {"type": "token", "content": clean}
         yield {"__final__": response}
 
     async def run(
@@ -158,8 +201,20 @@ class AgentRunner:
                                 "content":     result_str,
                             })
 
-                            # Calculation is done — skip LLM round-trip, let caller emit calc_complete
+                            # Emit summary text directly from result_summary — no extra LLM round-trip
                             if auto_calculated:
+                                rs = prog.get("result_summary", {})
+                                if rs and rs.get("status") == "calculation_complete":
+                                    summary = (
+                                        f"✅ 计算完成！\n"
+                                        f"**{rs.get('product_name', '产品')}** 每件碳足迹："
+                                        f"**{rs.get('total_kgco2e', 0)} kg CO₂e**\n"
+                                        f"相当于开车 {rs.get('analogy_km', 0)} 公里的排放量。\n"
+                                        f"最大排放来源：{rs.get('hotspot', '未知')}，"
+                                        f"占 {rs.get('hotspot_pct', 0)}%。\n"
+                                        f"报告已生成，点击下方按钮即可下载。"
+                                    )
+                                    yield {"type": "token", "content": summary}
                                 messages.append({"role": "user", "content": tool_results})
                                 yield {"type": "done"}
                                 return
@@ -171,6 +226,21 @@ class AgentRunner:
                                     None,
                                     lambda: self.execute_tool(_block.name, _block.input),
                                 )
+                                # Sub-agent switch: exit immediately so caller can launch it
+                                # without MiniMax looping on start_product_calc
+                                try:
+                                    payload = json.loads(result_str)
+                                    if isinstance(payload, dict) and payload.get("__sub_agent__"):
+                                        tool_results.append({
+                                            "type":        "tool_result",
+                                            "tool_use_id": block.id,
+                                            "content":     result_str,
+                                        })
+                                        messages.append({"role": "user", "content": tool_results})
+                                        yield {"type": "done"}
+                                        return
+                                except (json.JSONDecodeError, AttributeError):
+                                    pass
                                 if _block.name in _DATA_TOOLS:
                                     yield {"type": "status", "content": "✅ 数据获取完成，正在生成分析…"}
                             except Exception as err:
@@ -193,6 +263,43 @@ class AgentRunner:
                 text = "".join(
                     b.text for b in final_message.content if b.type == "text"
                 )
+
+                # MiniMax fallback: detect TypeScript-style record_data calls in text
+                ts_args = _extract_ts_record_data(text)
+                if ts_args is not None:
+                    try:
+                        _args = ts_args
+                        result_str = await asyncio.get_event_loop().run_in_executor(
+                            None, lambda: self.execute_tool("record_data", _args)
+                        )
+                        prog = json.loads(result_str)
+                        yield {
+                            "type": "progress",
+                            "collected": prog.get("collected", 0),
+                            "total": prog.get("total", 5),
+                            "all_required": prog.get("all_required", False),
+                            "missing_labels": prog.get("missing_labels", []),
+                        }
+                        if prog.get("auto_calculated"):
+                            yield {"type": "status", "content": "✅ 数据收集完毕，碳足迹计算完成！"}
+                            rs = prog.get("result_summary", {})
+                            if rs and rs.get("status") == "calculation_complete":
+                                summary = (
+                                    f"✅ 计算完成！\n"
+                                    f"**{rs.get('product_name', '产品')}** 每件碳足迹："
+                                    f"**{rs.get('total_kgco2e', 0)} kg CO₂e**\n"
+                                    f"相当于开车 {rs.get('analogy_km', 0)} 公里的排放量。\n"
+                                    f"最大排放来源：{rs.get('hotspot', '未知')}，"
+                                    f"占 {rs.get('hotspot_pct', 0)}%。\n"
+                                    f"报告已生成，点击下方按钮即可下载。"
+                                )
+                                yield {"type": "token", "content": summary}
+                            messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "ts_fallback", "content": result_str}]})
+                            yield {"type": "done"}
+                            return
+                    except Exception:
+                        pass
+
                 messages.append({"role": "assistant", "content": text})
                 yield {"type": "done"}
                 return
