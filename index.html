@@ -855,7 +855,7 @@
           <div id="chat-input-wrap">
             <textarea id="chat-input" placeholder="向双碳顾问提问…" rows="1"
               oninput="autoResize(this)" onkeydown="handleChatKey(event)"
-              oncompositionstart="chatComposing=true" oncompositionend="chatComposing=false"></textarea>
+              oncompositionstart="chatComposing=true" oncompositionend="chatComposing=false;chatCompositionEnd=Date.now()"></textarea>
             <button id="chat-send-btn" onclick="sendChatMessage()" title="发送 (Enter)">
               <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
@@ -946,7 +946,7 @@
           <div id="policy-chat-input-wrap">
             <textarea id="policy-chat-input" placeholder="输入政策相关问题…" rows="1"
               oninput="autoResize(this)" onkeydown="handlePolicyChatKey(event)"
-              oncompositionstart="policyChatComposing=true" oncompositionend="policyChatComposing=false"></textarea>
+              oncompositionstart="policyChatComposing=true" oncompositionend="policyChatComposing=false;policyChatCompositionEnd=Date.now()"></textarea>
             <button id="policy-chat-send-btn" onclick="sendPolicyMessage()" title="发送 (Enter)">
               <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
@@ -1578,9 +1578,14 @@ function autoResize(el) {
 }
 
 let chatComposing = false;
+let chatCompositionEnd = 0;
 
 function handleChatKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey && !chatComposing) { e.preventDefault(); sendChatMessage(); }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    if (chatComposing || Date.now() - chatCompositionEnd < 100) return;
+    e.preventDefault();
+    sendChatMessage();
+  }
 }
 
 async function sendChatMessage() {
@@ -2026,9 +2031,14 @@ function askAIAboutExample(policyName, companyName) {
 }
 
 let policyChatComposing = false;
+let policyChatCompositionEnd = 0;
 
 function handlePolicyChatKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey && !policyChatComposing) { e.preventDefault(); sendPolicyMessage(); }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    if (policyChatComposing || Date.now() - policyChatCompositionEnd < 100) return;
+    e.preventDefault();
+    sendPolicyMessage();
+  }
 }
 
 async function sendPolicyMessage() {
