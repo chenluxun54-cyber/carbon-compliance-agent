@@ -1491,26 +1491,45 @@ async function deleteSession(event, sid) {
 
 // ── Chat ─────────────────────────────────────────────────────────────
 async function initChatSession() {
-  // Restore the most recently active session; only create new if none exist at all.
-  let targetSid = null;
+  // On page load: restore the last active session. NEVER create a new session
+  // automatically — only createNewSession() (triggered by the "+" button) does that.
+  const storedSid = localStorage.getItem('carbon_session_id');
+  let targetSid   = null;
   try {
     const listRes = await fetch(`${API}/sessions`);
     const list    = await listRes.json();
-    // list is ordered by last_active DESC — take the first real session
-    if (list.length > 0) targetSid = list[0].session_id;
+    if (list.length > 0) {
+      // Prefer the session the user was on last; fall back to most-recent
+      const stored = list.find(s => s.session_id === storedSid);
+      targetSid = stored ? stored.session_id : list[0].session_id;
+    }
   } catch (_) { /* fall through */ }
-  if (!targetSid) targetSid = localStorage.getItem('carbon_session_id');
+  // If server list is empty (first-ever launch), use localStorage as last resort
+  if (!targetSid) targetSid = storedSid;
 
-  const res = await fetch(`${API}/new_session`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: targetSid ? JSON.stringify({ session_id: targetSid }) : '{}',
-  });
-  const d = await res.json();
-  sessionId = d.session_id;
-  localStorage.setItem('carbon_session_id', sessionId);
-  if (d.restored && d.message_count > 0) {
-    await restoreChatHistory();
+  if (targetSid) {
+    // Restore existing session (load messages into server memory)
+    const res = await fetch(`${API}/new_session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: targetSid }),
+    });
+    const d = await res.json();
+    sessionId = d.session_id;
+    localStorage.setItem('carbon_session_id', sessionId);
+    if (d.restored && d.message_count > 0) {
+      await restoreChatHistory();
+    }
+  } else {
+    // Truly first launch — no sessions anywhere, create one
+    const res = await fetch(`${API}/new_session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const d = await res.json();
+    sessionId = d.session_id;
+    localStorage.setItem('carbon_session_id', sessionId);
   }
 }
 
@@ -1716,12 +1735,20 @@ function handleSSE(payload, showUser) {
       dlBubble.className = 'msg-row assistant calc-report-bubble';
       dlBubble.innerHTML = `<div class="msg-bubble">
         ${summaryHtml}
-        <a href="/footprint-report/${sid}" download="carbon_footprint_report.html"
-           style="display:inline-block;padding:9px 20px;
-                  background:#16a34a;color:#fff;border-radius:8px;
-                  text-decoration:none;font-size:13px;font-weight:600">
-          📥 下载完整碳足迹报告
-        </a>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <a href="/footprint-report/${sid}" target="_blank"
+             style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;
+                    background:#16a34a;color:#fff;border-radius:8px;
+                    text-decoration:none;font-size:13px;font-weight:600">
+            📊 查看完整报告（含PDF导出）
+          </a>
+          <a href="/footprint-report/${sid}" download="carbon_footprint_report.html"
+             style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;
+                    background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:8px;
+                    text-decoration:none;font-size:13px;font-weight:600">
+            📥 下载 HTML
+          </a>
+        </div>
         <div id="${compDivId}" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span style="color:#9ca3af;font-size:12px">🔍 加载合规状态...</span>
         </div>

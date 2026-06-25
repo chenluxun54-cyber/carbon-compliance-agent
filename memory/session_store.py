@@ -6,7 +6,8 @@ Redis key layout:
   session:{sid}:meta      → Hash  { name, created_at, summarized }
   sessions:index          → Sorted Set  { member=sid, score=unix_ts }
 
-Falls back to an in-memory dict if Redis is unavailable (dev/test mode).
+Falls back to SQLite (memory/sessions.db) if Redis is unavailable so sessions
+survive server restarts without Redis.
 """
 
 import json
@@ -107,7 +108,142 @@ class _RedisBackend:
         return val == "1"
 
 
-# ── In-memory fallback ────────────────────────────────────────────
+# ── SQLite fallback ───────────────────────────────────────────────
+
+class _SQLiteBackend:
+    """Persists sessions to SQLite so they survive server restarts without Redis."""
+
+    def __init__(self):
+        import sqlite3 as _sqlite3
+        from pathlib import Path
+        self._db_path = str(Path(__file__).parent / "sessions.db")
+        self._sqlite3 = _sqlite3
+        self._init_db()
+
+    def _connect(self):
+        conn = self._sqlite3.connect(self._db_path, check_same_thread=False)
+        conn.row_factory = self._sqlite3.Row
+        return conn
+
+    def _init_db(self):
+        with self._connect() as conn:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id  TEXT PRIMARY KEY,
+                    name        TEXT DEFAULT '',
+                    created_at  TEXT NOT NULL,
+                    last_active TEXT NOT NULL,
+                    summarized  INTEGER DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS messages (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id  TEXT NOT NULL,
+                    role        TEXT NOT NULL,
+                    content     TEXT NOT NULL,
+                    created_at  TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_msg_session ON messages(session_id, id);
+            """)
+
+    def create(self, sid: str) -> None:
+        now = _now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO sessions(session_id, name, created_at, last_active) VALUES(?,?,?,?)",
+                (sid, '', now, now),
+            )
+
+    def exists(self, sid: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute("SELECT 1 FROM sessions WHERE session_id = ?", (sid,)).fetchone()
+        return row is not None
+
+    def delete(self, sid: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM messages WHERE session_id = ?", (sid,))
+            conn.execute("DELETE FROM sessions WHERE session_id = ?", (sid,))
+
+    def list(self, limit: int = 50) -> list:
+        with self._connect() as conn:
+            rows = conn.execute("""
+                SELECT s.session_id, s.name, s.created_at, s.last_active,
+                       (SELECT content FROM messages m
+                        WHERE m.session_id = s.session_id AND m.role = 'user'
+                        ORDER BY m.id LIMIT 1) AS first_user_content
+                FROM sessions s
+                ORDER BY s.last_active DESC
+                LIMIT ?
+            """, (limit,)).fetchall()
+        result = []
+        for r in rows:
+            preview = ''
+            if r['first_user_content']:
+                try:
+                    text = json.loads(r['first_user_content'])
+                    if isinstance(text, str):
+                        preview = text[:50]
+                except Exception:
+                    pass
+            result.append({
+                'session_id': r['session_id'],
+                'name':       r['name'] or '',
+                'created_at': r['created_at'],
+                'last_active': r['last_active'],
+                'preview':    preview,
+            })
+        return result
+
+    def save_messages(self, sid: str, messages: list) -> None:
+        now = _now_iso()
+        with self._connect() as conn:
+            conn.execute("DELETE FROM messages WHERE session_id = ?", (sid,))
+            for m in messages:
+                conn.execute(
+                    "INSERT INTO messages(session_id, role, content, created_at) VALUES(?,?,?,?)",
+                    (sid, m['role'], json.dumps(m['content'], ensure_ascii=False), now),
+                )
+            conn.execute("UPDATE sessions SET last_active = ? WHERE session_id = ?", (now, sid))
+
+    def load_messages(self, sid: str) -> list:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id",
+                (sid,),
+            ).fetchall()
+        return [{'role': r['role'], 'content': json.loads(r['content'])} for r in rows]
+
+    def load_display(self, sid: str) -> list:
+        msgs = self.load_messages(sid)
+        out = []
+        for m in msgs:
+            role    = m.get('role')
+            content = m.get('content')
+            if role in ('user', 'assistant') and isinstance(content, str) and content.strip():
+                text = content.strip()
+                if not text.startswith('[系统上下文]') and not text.startswith('[calc_auto_continue]'):
+                    out.append({'role': role, 'text': content})
+        return out
+
+    def get_name(self, sid: str) -> str:
+        with self._connect() as conn:
+            row = conn.execute("SELECT name FROM sessions WHERE session_id = ?", (sid,)).fetchone()
+        return (row['name'] or '') if row else ''
+
+    def set_name(self, sid: str, name: str) -> None:
+        with self._connect() as conn:
+            conn.execute("UPDATE sessions SET name = ? WHERE session_id = ?", (name, sid))
+
+    def mark_summarized(self, sid: str) -> None:
+        with self._connect() as conn:
+            conn.execute("UPDATE sessions SET summarized = 1 WHERE session_id = ?", (sid,))
+
+    def is_summarized(self, sid: str) -> bool:
+        with self._connect() as conn:
+            row = conn.execute("SELECT summarized FROM sessions WHERE session_id = ?", (sid,)).fetchone()
+        return bool(row['summarized']) if row else False
+
+
+# ── In-memory fallback (kept for tests/CI only) ───────────────────
 
 class _DictBackend:
     """Used when Redis is unavailable. Sessions lost on restart."""
@@ -169,8 +305,8 @@ class SessionStore:
             self._backend = _RedisBackend(redis_url)
             log.info("SessionStore: connected to Redis at %s", redis_url)
         except Exception as exc:
-            log.warning("SessionStore: Redis unavailable (%s) — falling back to in-memory dict", exc)
-            self._backend = _DictBackend()
+            log.warning("SessionStore: Redis unavailable (%s) — falling back to SQLite", exc)
+            self._backend = _SQLiteBackend()
 
     # Delegate everything to backend
     def create(self, sid: str)                          -> None:   self._backend.create(sid)
