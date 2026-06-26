@@ -23,11 +23,20 @@ SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 # Categories that cannot be reliably auto-fixed with code changes
 SKIP_CATEGORIES = {"response_quality", "missing_feature", "performance", "config"}
 
-client = anthropic.AsyncAnthropic(
-    base_url="https://api.minimaxi.com/anthropic",
-    api_key=os.environ.get("MINIMAX_API_KEY", ""),
-)
-MODEL = "MiniMax-Text-01"
+_PROVIDER = os.environ.get("MODEL_PROVIDER", "").lower()
+_MINIMAX_KEY = os.environ.get("MINIMAX_API_KEY", "")
+_ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Auto-detect: prefer explicitly set MODEL_PROVIDER; fall back to whichever key is present
+if _PROVIDER == "anthropic" or (not _MINIMAX_KEY and _ANTHROPIC_KEY):
+    client = anthropic.AsyncAnthropic(api_key=_ANTHROPIC_KEY)
+    MODEL = "claude-haiku-4-5-20251001"
+else:
+    client = anthropic.AsyncAnthropic(
+        base_url="https://api.minimaxi.com/anthropic",
+        api_key=_MINIMAX_KEY,
+    )
+    MODEL = os.environ.get("MINIMAX_MODEL", "MiniMax-Text-01")
 
 FIX_PROMPT = """\
 You are a code fixer for a FastAPI carbon-compliance-agent (Python).

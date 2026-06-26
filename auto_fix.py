@@ -80,8 +80,8 @@ def escalate_to_manual_review() -> None:
 
 
 async def main():
-    if not os.environ.get("MINIMAX_API_KEY"):
-        print("[auto_fix] ERROR: MINIMAX_API_KEY not set.")
+    if not os.environ.get("MINIMAX_API_KEY") and not os.environ.get("ANTHROPIC_API_KEY"):
+        print("[auto_fix] ERROR: Set MINIMAX_API_KEY or ANTHROPIC_API_KEY before running.")
         sys.exit(1)
 
     print("=" * 60)

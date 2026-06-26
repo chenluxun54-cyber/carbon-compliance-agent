@@ -645,7 +645,7 @@ processed_up_to: 2026-06-22T18:07:55.458935
 ## SESSION 2026-06-22T18:25:35.977226
 - severity: low
 - category: response_quality
-- status: new
+- status: needs_review
 - file: agent.py
 - line: unknown
 - error: AI response lacks personalization and engagement for a simple greeting.
@@ -668,7 +668,7 @@ processed_up_to: 2026-06-22T18:25:47.599448
 ## SESSION 2026-06-22T18:25:35.977226
 - severity: low
 - category: response_quality
-- status: new
+- status: needs_review
 - file: agent.py
 - line: unknown
 - error: AI response lacks a clear call to action or prompt for the user's specific needs.
@@ -684,7 +684,7 @@ processed_up_to: 2026-06-22T18:25:47.599448
 ## SESSION 2026-06-22T18:25:35.977226
 - severity: low
 - category: response_quality
-- status: new
+- status: needs_review
 - file: agent.py
 - line: unknown
 - error: AI response is too generic and does not engage the user effectively.
@@ -1771,13 +1771,13 @@ SUMMARY: 3 issues — The main problems are incomplete AI responses, slow perfor
 processed_up_to: 2026-06-23T10:08:10.646413
 
 ## ISSUE-20260623-077
-- **severity**: high
-- **category**: response_quality
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: AI response is incomplete and requests unnecessary information.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: high
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: AI response is incomplete and requests unnecessary information.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. The AI requests additional information such as "铝材来源", "塑料类型", "运输距离和方式", and "报废处理方式", which are not critical for a basic carbon footprint calculation.
@@ -1785,19 +1785,19 @@ processed_up_to: 2026-06-23T10:08:10.646413
   ```
   记下了 ✅ [产品名称：铝制水杯，重量：0.3千克，工厂：浙江，用电量：0.8度，主要材料：铝0.27千克，塑料0.03千克]。还需要 4 项：[铝材来源]，[塑料类型]，[运输距离和方式]，[报废处理方式]。
   ```
-- **fix_hint**: Modify the AI logic to prioritize essential data points for carbon footprint calculation and avoid requesting non-critical information unless necessary. Implement a more robust data inference mechanism to estimate or use default values for missing information.
-- **related_files**: scorer.py, data_handler.py
+- fix_hint: Modify the AI logic to prioritize essential data points for carbon footprint calculation and avoid requesting non-critical information unless necessary. Implement a more robust data inference mechanism to estimate or use default values for missing information.
+- related_files: scorer.py, data_handler.py
 
 ---
 
 ## ISSUE-20260623-078
-- **severity**: high
-- **category**: performance
-- **status**: new
-- **file**: calc.py
-- **line**: unknown
-- **error**: The response time exceeds the acceptable threshold (>10s).
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: high
+- category: performance
+- status: needs_review
+- file: calc.py
+- line: unknown
+- error: The response time exceeds the acceptable threshold (>10s).
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. The total elapsed time is 15.52s.
@@ -1805,19 +1805,19 @@ processed_up_to: 2026-06-23T10:08:10.646413
   ```
   total_elapsed: 15.52s
   ```
-- **fix_hint**: Optimize the `start_product_calc` function to reduce processing time. Investigate the tool calls and ensure they are not redundant. Consider implementing caching for repeated requests.
-- **related_files**: calc.py, agent.py
+- fix_hint: Optimize the `start_product_calc` function to reduce processing time. Investigate the tool calls and ensure they are not redundant. Consider implementing caching for repeated requests.
+- related_files: calc.py, agent.py
 
 ---
 
 ## ISSUE-20260623-079
-- **severity**: medium
-- **category**: logic_bug
-- **status**: new
-- **file**: scorer.py
-- **line**: unknown
-- **error**: AI requests information that may not be relevant for carbon footprint calculation.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: medium
+- category: logic_bug
+- status: fixed
+- file: scorer.py
+- line: unknown
+- error: AI requests information that may not be relevant for carbon footprint calculation.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. The AI requests "铝材来源" and "塑料类型", which may not be critical for a basic carbon footprint calculation.
@@ -1825,8 +1825,8 @@ processed_up_to: 2026-06-23T10:08:10.646413
   ```
   还需要 4 项：[铝材来源]，[塑料类型]，[运输距离和方式]，[报废处理方式]。
   ```
-- **fix_hint**: Review the AI's decision-making process for requesting information. Ensure that only relevant and critical data points are requested for carbon footprint calculations. Implement a priority system for data requests.
-- **related_files**: scorer.py, data_handler.py
+- fix_hint: Review the AI's decision-making process for requesting information. Ensure that only relevant and critical data points are requested for carbon footprint calculations. Implement a priority system for data requests.
+- related_files: scorer.py, data_handler.py
 
 ---
 
@@ -2229,13 +2229,13 @@ SUMMARY: 3 issues — The main problems are related to the quality of the AI res
 processed_up_to: 2026-06-23T10:45:47.940264
 
 ## ISSUE-20260623-100
-- **severity**: high
-- **category**: response_quality
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: AI response is incomplete and lacks detailed breakdown of carbon footprint components.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: high
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: AI response is incomplete and lacks detailed breakdown of carbon footprint components.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. Observe that the AI response only provides a summary of the total carbon footprint and the largest emission source but does not include a detailed breakdown of emissions from different scopes (e.g., scope 1, scope 2, scope 3) or specific materials.
@@ -2246,17 +2246,17 @@ processed_up_to: 2026-06-23T10:45:47.940264
   最大排放来源：上游原材料（铝 0.27kg），占 81%。
   ```
   The response lacks detailed information on the breakdown of emissions, such as the contribution of electricity (scope 2) and packaging (scope 3).
-- **fix_hint**: Modify the AI response to include a detailed breakdown of emissions from different scopes and specific materials. For example, include the emissions from electricity usage, aluminum production, and plastic usage.
-- **related_files**: scorer.py, calc.py
+- fix_hint: Modify the AI response to include a detailed breakdown of emissions from different scopes and specific materials. For example, include the emissions from electricity usage, aluminum production, and plastic usage.
+- related_files: scorer.py, calc.py
 
 ## ISSUE-20260623-101
-- **severity**: medium
-- **category**: performance
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: Response time exceeds the 10-second threshold.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: medium
+- category: performance
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: Response time exceeds the 10-second threshold.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. Observe that the total elapsed time is 11.16 seconds.
@@ -2264,17 +2264,17 @@ processed_up_to: 2026-06-23T10:45:47.940264
   ```
   total_elapsed: 11.16s
   ```
-- **fix_hint**: Optimize the tool calls and AI response generation process to reduce the total elapsed time. For example, consider caching frequent queries or optimizing the data retrieval process.
-- **related_files**: agent.py, calc.py
+- fix_hint: Optimize the tool calls and AI response generation process to reduce the total elapsed time. For example, consider caching frequent queries or optimizing the data retrieval process.
+- related_files: agent.py, calc.py
 
 ## ISSUE-20260623-102
-- **severity**: medium
-- **category**: response_quality
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: AI response does not provide a link or button to download the report as mentioned.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: medium
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: AI response does not provide a link or button to download the report as mentioned.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. Observe that the AI response mentions "报告已生成，点击下方按钮即可下载" but does not provide a link or button.
@@ -2282,8 +2282,8 @@ processed_up_to: 2026-06-23T10:45:47.940264
   ```
   报告已生成，点击下方按钮即可下载。
   ```
-- **fix_hint**: Ensure that the AI response includes a functional link or button for downloading the report. For example, include a URL or a button element that triggers the download.
-- **related_files**: agent.py, ui.py
+- fix_hint: Ensure that the AI response includes a functional link or button for downloading the report. For example, include a URL or a button element that triggers the download.
+- related_files: agent.py, ui.py
 
 SUMMARY: 3 issues — The main problems are incomplete AI responses lacking detailed breakdowns, slow response times exceeding 10 seconds, and the absence of a functional download link in the AI response.
 processed_up_to: 2026-06-23T15:04:25.018828
@@ -2342,13 +2342,13 @@ SUMMARY: 3 issues — The main problems are incomplete scope details in the AI r
 processed_up_to: 2026-06-23T15:05:23.316299
 
 ## ISSUE-20260623-106
-- **severity**: high
-- **category**: response_quality
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: The AI response does not provide the complete breakdown of the carbon footprint calculation, specifically missing the detailed scope 3 emissions for packaging and other components.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: high
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: The AI response does not provide the complete breakdown of the carbon footprint calculation, specifically missing the detailed scope 3 emissions for packaging and other components.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. Observe that the AI response does not include the detailed breakdown of scope 3 emissions for packaging and other components, despite the tool call result indicating that such data was collected.
@@ -2362,17 +2362,17 @@ processed_up_to: 2026-06-23T15:05:23.316299
     "scope3_packaging": 
   }
   ```
-- **fix_hint**: Update the AI response template to include a detailed breakdown of all scope emissions, including packaging and other components, when such data is available.
-- **related_files**: scorer.py, response_templates.py
+- fix_hint: Update the AI response template to include a detailed breakdown of all scope emissions, including packaging and other components, when such data is available.
+- related_files: scorer.py, response_templates.py
 
 ## ISSUE-20260623-107
-- **severity**: medium
-- **category**: performance
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: The total elapsed time for the session is 10.93 seconds, which is slightly above the desired threshold of 10 seconds.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: medium
+- category: performance
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: The total elapsed time for the session is 10.93 seconds, which is slightly above the desired threshold of 10 seconds.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. Observe that the total elapsed time is 10.93 seconds.
@@ -2380,17 +2380,17 @@ processed_up_to: 2026-06-23T15:05:23.316299
   ```
   total_elapsed: 10.93s
   ```
-- **fix_hint**: Optimize the tool calls and AI response generation to reduce the total elapsed time. Consider parallelizing non-dependent tool calls or caching frequent queries.
-- **related_files**: agent.py, tool_manager.py
+- fix_hint: Optimize the tool calls and AI response generation to reduce the total elapsed time. Consider parallelizing non-dependent tool calls or caching frequent queries.
+- related_files: agent.py, tool_manager.py
 
 ## ISSUE-20260623-108
-- **severity**: low
-- **category**: response_quality
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: The AI response includes a button for downloading a report, but there is no indication of how or where the user can access this button.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: low
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: The AI response includes a button for downloading a report, but there is no indication of how or where the user can access this button.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. Observe that the AI response mentions a button for downloading the report, but there is no context or explanation on how to access it.
@@ -2398,20 +2398,20 @@ processed_up_to: 2026-06-23T15:05:23.316299
   ```
   "报告已生成，点击下方按钮即可下载。"
   ```
-- **fix_hint**: Ensure that the AI response provides clear instructions on how to access the download button, or include the button directly in the response if applicable.
-- **related_files**: response_templates.py, ui_components.py
+- fix_hint: Ensure that the AI response provides clear instructions on how to access the download button, or include the button directly in the response if applicable.
+- related_files: response_templates.py, ui_components.py
 
 SUMMARY: 3 issues — The main problems are incomplete response content, slight performance delay, and unclear instructions for accessing the report download button.
 processed_up_to: 2026-06-23T15:48:34.934150
 
 ## ISSUE-20260623-109
-- **severity**: medium
-- **category**: response_quality
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: AI response does not provide detailed breakdown of the carbon footprint calculation, such as specific contributions from materials, manufacturing, and transportation.
-- **trigger**: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
+- severity: medium
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: AI response does not provide detailed breakdown of the carbon footprint calculation, such as specific contributions from materials, manufacturing, and transportation.
+- trigger: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
 - **steps_to_reproduce**: |
   1. Send: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
   2. Observe that the AI response only provides a summary of the total carbon footprint and the largest emission source, without detailed breakdown.
@@ -2423,17 +2423,17 @@ processed_up_to: 2026-06-23T15:48:34.934150
   最大排放来源：生产用电（西南电网），占 100%。
   ```
   The response lacks detailed information on how the 0.17 kg CO₂e is distributed across different stages or components of the product lifecycle.
-- **fix_hint**: Enhance the AI response to include a detailed breakdown of the carbon footprint, such as contributions from materials, manufacturing, transportation, and other relevant factors. This can be achieved by modifying the response generation logic in `agent.py` to include more detailed information from the `result_summary` provided by the tool.
-- **related_files**: scorer.py, result_parser.py
+- fix_hint: Enhance the AI response to include a detailed breakdown of the carbon footprint, such as contributions from materials, manufacturing, transportation, and other relevant factors. This can be achieved by modifying the response generation logic in `agent.py` to include more detailed information from the `result_summary` provided by the tool.
+- related_files: scorer.py, result_parser.py
 
 ## ISSUE-20260623-110
-- **severity**: high
-- **category**: missing_feature
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: The agent does not support querying carbon scores for specific companies, as indicated by the user message in the session.
-- **trigger**: "帮我查一下某公司的碳排放分数"
+- severity: high
+- category: missing_feature
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: The agent does not support querying carbon scores for specific companies, as indicated by the user message in the session.
+- trigger: "帮我查一下某公司的碳排放分数"
 - **steps_to_reproduce**: |
   1. Send: "帮我查一下某公司的碳排放分数"
   2. Observe that the agent does not provide a response related to company carbon scores.
@@ -2444,17 +2444,17 @@ processed_up_to: 2026-06-23T15:48:34.934150
     ✅ 对不起，我目前无法查询特定公司的碳排放分数。
   ```
   The agent explicitly states that it cannot perform this function.
-- **fix_hint**: Implement functionality to query and retrieve carbon scores for specific companies. This may involve integrating with additional databases or APIs that provide company-level carbon emissions data. Update the agent's capabilities in `agent.py` to handle such queries.
-- **related_files**: agent.py, data_handler.py
+- fix_hint: Implement functionality to query and retrieve carbon scores for specific companies. This may involve integrating with additional databases or APIs that provide company-level carbon emissions data. Update the agent's capabilities in `agent.py` to handle such queries.
+- related_files: agent.py, data_handler.py
 
 ## ISSUE-20260623-111
-- **severity**: medium
-- **category**: performance
-- **status**: new
-- **file**: scorer.py
-- **line**: unknown
-- **error**: The total elapsed time for the session is 6.86 seconds, which is close to the threshold for slow responses (10 seconds). This may indicate potential performance issues.
-- **trigger**: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
+- severity: medium
+- category: performance
+- status: needs_review
+- file: scorer.py
+- line: unknown
+- error: The total elapsed time for the session is 6.86 seconds, which is close to the threshold for slow responses (10 seconds). This may indicate potential performance issues.
+- trigger: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
 - **steps_to_reproduce**: |
   1. Send: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
   2. Observe that the total elapsed time is 6.86 seconds.
@@ -2463,17 +2463,17 @@ processed_up_to: 2026-06-23T15:48:34.934150
   total_elapsed: 6.86s
   ```
   While not exceeding the 10-second threshold, the time is significant and may impact user experience.
-- **fix_hint**: Optimize the tool calls and data processing in `scorer.py` and related files to reduce the total elapsed time. This may involve caching frequent queries, optimizing database queries, or parallelizing independent tasks.
-- **related_files**: scorer.py, data_handler.py, tool_manager.py
+- fix_hint: Optimize the tool calls and data processing in `scorer.py` and related files to reduce the total elapsed time. This may involve caching frequent queries, optimizing database queries, or parallelizing independent tasks.
+- related_files: scorer.py, data_handler.py, tool_manager.py
 
 ## ISSUE-20260623-112
-- **severity**: critical
-- **category**: api_error
-- **status**: new
-- **file**: tool_manager.py
-- **line**: unknown
-- **error**: The tool call for `record_data` returned a result indicating that 5 out of 5 required data points were collected, but the AI response only shows 4 data points in the `result_summary`.
-- **trigger**: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
+- severity: critical
+- category: api_error
+- status: needs_review
+- file: tool_manager.py
+- line: unknown
+- error: The tool call for `record_data` returned a result indicating that 5 out of 5 required data points were collected, but the AI response only shows 4 data points in the `result_summary`.
+- trigger: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
 - **steps_to_reproduce**: |
   1. Send: "帮我算一个竹纤维杯子的碳足迹，重量0.2千克，四川工厂，用电0.5度，材料是竹纤维0.2千克"
   2. Observe that the `record_data` tool call indicates 5 data points were collected, but the `result_summary` in the AI response only lists 4 data points.
@@ -2487,20 +2487,20 @@ processed_up_to: 2026-06-23T15:48:34.934150
   result_summary": {"status": "calculation_complete", "product_name": "竹纤维杯子", "functional_unit": "每件（200g 竹纤维杯子）", "total_kgco2e": 0.17, "analogy_km": 0.8, "hotspot": "生产用电（西南电网）", "hotspot_pct": 100, ...
   ```
   The `result_summary` does not include all 5 data points, indicating a discrepancy.
-- **fix_hint**: Investigate the discrepancy between the data collected by the `record_data` tool and the data presented in the `result_summary`. Ensure that all collected data points are correctly included in the `result_summary`. This may involve updating the data processing logic in `tool_manager.py` or related files.
-- **related_files**: tool_manager.py, data_handler.py, scorer.py
+- fix_hint: Investigate the discrepancy between the data collected by the `record_data` tool and the data presented in the `result_summary`. Ensure that all collected data points are correctly included in the `result_summary`. This may involve updating the data processing logic in `tool_manager.py` or related files.
+- related_files: tool_manager.py, data_handler.py, scorer.py
 
 SUMMARY: 4 issues — The main problems are related to response quality, missing functionality, performance, and API errors. The agent needs improvements in providing detailed carbon footprint breakdowns, querying company carbon scores, optimizing performance, and ensuring data consistency.
 processed_up_to: 2026-06-23T15:49:42.872302
 
 ## ISSUE-20260623-113
-- **severity**: high
-- **category**: response_quality
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: AI response is incomplete and missing critical details about the carbon footprint breakdown.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: high
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: AI response is incomplete and missing critical details about the carbon footprint breakdown.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. The AI response provides a total carbon footprint but does not include a detailed breakdown of the emissions by scope (e.g., scope 1, scope 2, scope 3) or specific materials.
@@ -2513,17 +2513,17 @@ processed_up_to: 2026-06-23T15:49:42.872302
   报告已生成，点击下方按钮即可下载。
   ```
   The response lacks a detailed breakdown of emissions by scope and specific materials, which is crucial for understanding the carbon footprint.
-- **fix_hint**: Modify the AI response to include a detailed breakdown of emissions by scope (scope 1, scope 2, scope 3) and specific materials (e.g., aluminum, plastic). For example, include information such as "Scope 1: 0 kg CO₂e, Scope 2: 0.465 kg CO₂e, Scope 3: 2.283 kg CO₂e" and specify the contributions of aluminum and plastic to the total footprint.
-- **related_files**: scorer.py, calc.py
+- fix_hint: Modify the AI response to include a detailed breakdown of emissions by scope (scope 1, scope 2, scope 3) and specific materials (e.g., aluminum, plastic). For example, include information such as "Scope 1: 0 kg CO₂e, Scope 2: 0.465 kg CO₂e, Scope 3: 2.283 kg CO₂e" and specify the contributions of aluminum and plastic to the total footprint.
+- related_files: scorer.py, calc.py
 
 ## ISSUE-20260623-114
-- **severity**: medium
-- **category**: performance
-- **status**: new
-- **file**: agent.py
-- **line**: unknown
-- **error**: The total elapsed time for the session exceeds 10 seconds, which is considered slow.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: medium
+- category: performance
+- status: needs_review
+- file: agent.py
+- line: unknown
+- error: The total elapsed time for the session exceeds 10 seconds, which is considered slow.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. The total elapsed time for the session is 11.05 seconds.
@@ -2532,17 +2532,17 @@ processed_up_to: 2026-06-23T15:49:42.872302
   total_elapsed: 11.05s
   ```
   The total elapsed time exceeds the acceptable threshold of 10 seconds.
-- **fix_hint**: Optimize the tool calls and AI response generation process to reduce the total elapsed time. For example, consider caching frequent queries or optimizing the data retrieval process.
-- **related_files**: agent.py, scorer.py
+- fix_hint: Optimize the tool calls and AI response generation process to reduce the total elapsed time. For example, consider caching frequent queries or optimizing the data retrieval process.
+- related_files: agent.py, scorer.py
 
 ## ISSUE-20260623-115
-- **severity**: medium
-- **category**: data_bug
-- **status**: new
-- **file**: calc.py
-- **line**: unknown
-- **error**: The "analogy_km" value of 12.4 km is likely incorrect or misleading without proper context.
-- **trigger**: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
+- severity: medium
+- category: data_bug
+- status: fixed
+- file: calc.py
+- line: unknown
+- error: The "analogy_km" value of 12.4 km is likely incorrect or misleading without proper context.
+- trigger: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
 - **steps_to_reproduce**: |
   1. Send: "我想计算一个铝制水杯的碳足迹。产品重量0.3千克，浙江工厂，生产每个杯子用0.8度电，主要材料是铝0.27千克加塑料0.03千克。"
   2. The AI response includes an "analogy_km" value of 12.4 km without explaining how this value was derived or what it represents.
@@ -2551,8 +2551,8 @@ processed_up_to: 2026-06-23T15:49:42.872302
   相当于开车 12.4 公里的排放量。
   ```
   The analogy_km value is provided without any explanation or context, which may be confusing or misleading to the user.
-- **fix_hint**: Provide a clear explanation of the "analogy_km" value, including how it was derived and what it represents. For example, "The carbon footprint of this aluminum water bottle is equivalent to driving a car for 12.4 km, based on average vehicle emissions."
-- **related_files**: calc.py, agent.py
+- fix_hint: Provide a clear explanation of the "analogy_km" value, including how it was derived and what it represents. For example, "The carbon footprint of this aluminum water bottle is equivalent to driving a car for 12.4 km, based on average vehicle emissions."
+- related_files: calc.py, agent.py
 
 SUMMARY: 3 issues — The main problems are incomplete AI responses lacking detailed breakdowns, slow response times exceeding 10 seconds, and potentially misleading analogy_km values without proper context.
 processed_up_to: 2026-06-23T15:56:32.018585
@@ -2618,3 +2618,62 @@ processed_up_to: 2026-06-23T15:56:32.018585
 
 SUMMARY: 3 issues — The main problems are the lack of detailed breakdown in the carbon footprint calculation, potential inaccuracies in the total carbon footprint due to incorrect emission factors, and the absence of a functional download button in the AI response.
 processed_up_to: 2026-06-23T15:57:11.125040
+
+## ISSUE-20260624-119
+- severity: critical
+- category: api_error
+- status: fixed
+- file: agent_runner.py
+- line: 141
+- error: BadRequestError: invalid params, tool result's tool id(ts_fallback) not found (2013)
+- trigger: "hi"
+- steps_to_reproduce: |
+  1. Send: "hi"
+  2. The agent attempts to process the message but encounters an error due to an invalid tool ID.
+- evidence: |
+  ```
+  BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': "invalid params, tool result's tool id(ts_fallback) not found (2013)"}, 'request_id': '068ace763488a276360afc1c456b2fa8'}
+  ```
+- fix_hint: Verify the tool ID 'ts_fallback' (2013) is correctly registered and accessible in the tool registry. Ensure that the tool ID is valid and that there are no discrepancies between the tool IDs used in the code and those registered with the Anthropic API.
+- related_files: agent.py, anthropic/_base_client.py
+
+## ISSUE-20260624-120
+- severity: high
+- category: response_quality
+- status: needs_review
+- file: agent.py
+- line: 986
+- error: Empty or error response to a simple greeting
+- trigger: "hi"
+- steps_to_reproduce: |
+  1. Send: "hi"
+  2. The agent fails to respond and returns an empty or error message.
+- evidence: |
+  ```
+  ai_response: |
+    (empty or error)
+  ```
+- fix_hint: Implement a fallback mechanism in the agent to handle unexpected errors gracefully. Ensure that the agent responds with a user-friendly message when it encounters issues processing a request.
+- related_files: agent.py, agent_runner.py
+
+## ISSUE-20260624-121
+- severity: medium
+- category: performance
+- status: needs_review
+- file: agent_runner.py
+- line: 141
+- error: Slow response time (>10s) due to error handling
+- trigger: "hi"
+- steps_to_reproduce: |
+  1. Send: "hi"
+  2. The agent takes longer than 10 seconds to respond due to error handling and attempting to process the message.
+- evidence: |
+  ```
+  total_elapsed: 1.97s
+  ```
+  (Note: Although the elapsed time is less than 10s, the error handling process may indicate a potential for slow responses in other cases.)
+- fix_hint: Optimize the error handling process to minimize the time taken to respond to user messages. Consider implementing timeouts and more efficient error checking mechanisms.
+- related_files: agent_runner.py, agent.py
+
+SUMMARY: 3 issues — The main problems are related to API errors due to invalid tool IDs, empty or error responses to user messages, and potential performance issues with error handling.
+processed_up_to: 2026-06-24T16:55:43.373870
