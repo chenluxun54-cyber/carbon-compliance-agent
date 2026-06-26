@@ -294,7 +294,9 @@ class AgentRunner:
                                     f"报告已生成，点击下方按钮即可下载。"
                                 )
                                 yield {"type": "token", "content": summary}
-                            messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "ts_fallback", "content": result_str}]})
+                            # Don't append ts_fallback tool_result — it has no matching
+                            # tool_use block and would corrupt the session history.
+                            # We're returning immediately so no further LLM turn needed.
                             yield {"type": "done"}
                             return
                     except Exception:
