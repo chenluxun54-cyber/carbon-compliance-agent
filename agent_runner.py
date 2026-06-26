@@ -59,6 +59,47 @@ _STATUS_MSGS: dict[str, str] = {
 _DATA_TOOLS = {"carbon_score", "finalize_footprint"}
 
 
+def _sanitize_messages(messages: list) -> list:
+    """
+    Remove orphaned tool_result entries that have no matching tool_use block
+    in the preceding assistant message.  This can happen when ts_fallback IDs
+    were written into session history by an older version of the code.
+    Mutates the list in-place and returns it.
+    """
+    # Build a set of all tool_use IDs that appear in assistant messages
+    valid_ids: set[str] = set()
+    for msg in messages:
+        if msg.get("role") == "assistant":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        valid_ids.add(block["id"])
+
+    # Drop user messages that are purely orphaned tool_results
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        if msg.get("role") == "user":
+            content = msg.get("content", [])
+            if isinstance(content, list) and all(
+                isinstance(b, dict) and b.get("type") == "tool_result"
+                for b in content
+            ):
+                # Keep only tool_results whose id is in valid_ids
+                cleaned = [
+                    b for b in content
+                    if b.get("tool_use_id") in valid_ids
+                ]
+                if not cleaned:
+                    messages.pop(i)
+                    continue  # don't increment
+                elif len(cleaned) != len(content):
+                    messages[i] = {**msg, "content": cleaned}
+        i += 1
+    return messages
+
+
 class AgentRunner:
     def __init__(
         self,
@@ -134,6 +175,7 @@ class AgentRunner:
         system_prompt: str,
         tools: list,
     ) -> AsyncGenerator[dict, None]:
+        _sanitize_messages(messages)  # drop any orphaned ts_fallback tool_results
         for iteration in range(self.max_iterations):
             final_message = None
 
