@@ -325,8 +325,29 @@
     .method-tag.direct { background: #fef3c7; color: #92400e; }
 
     /* ── Tab 3: 历史趋势 ───────────────────────────────── */
-    .chart-card { padding: 24px; flex-shrink: 0; }
-    .chart-wrap { position: relative; height: 320px; }
+    #tab-history { gap: 20px; }
+    .chart-card { padding: 28px 28px 20px; flex-shrink: 0; }
+    .chart-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .chart-card-header .card-title { margin: 0; font-size: 15px; font-weight: 600; }
+    .chart-badge {
+      font-size: 11px; padding: 3px 10px; border-radius: 20px;
+      background: #f0fdf4; color: #16a34a; font-weight: 500;
+    }
+    .chart-wrap { position: relative; height: 420px; }
+    .chart-wrap-sm { position: relative; height: 360px; }
+    .chart-footer {
+      display: flex; gap: 20px; flex-wrap: wrap;
+      margin-top: 16px; padding-top: 16px; border-top: 1px solid #f3f4f6;
+    }
+    .chart-stat { display: flex; flex-direction: column; gap: 2px; }
+    .chart-stat-label { font-size: 11px; color: var(--text-light); }
+    .chart-stat-value { font-size: 18px; font-weight: 700; color: var(--text); }
+    .chart-stat-value.up   { color: #16a34a; }
+    .chart-stat-value.down { color: #ef4444; }
+    .chart-stat-value.flat { color: #f59e0b; }
 
     /* ── Tab 4: AI 对话 ────────────────────────────────── */
     #tab-chat {
@@ -1244,19 +1265,58 @@ async function loadHistory() {
 }
 
 function renderHistory(data) {
-  document.getElementById('tab-history').innerHTML = `
-    <div class="card chart-card">
-      <div class="card-title">综合评分历史趋势</div>
-      <div class="chart-wrap"><canvas id="hist-canvas"></canvas></div>
-    </div>
-    <div class="card chart-card">
-      <div class="card-title">各维度得分趋势</div>
-      <div class="chart-wrap"><canvas id="hist-dim-canvas"></canvas></div>
-    </div>`;
-
   const years  = data.map(d => d.report_year + ' 年');
   const totals = data.map(d => d.total_score);
 
+  // 动态 y 轴范围：以数据为中心，上下各留 15% padding
+  function yRange(values, padRatio = 0.15) {
+    const mn = Math.min(...values), mx = Math.max(...values);
+    const pad = Math.max((mx - mn) * padRatio, 3);
+    return { min: Math.max(0, Math.floor(mn - pad)), max: Math.min(100, Math.ceil(mx + pad)) };
+  }
+
+  // 统计摘要
+  const first = totals[0], last = totals[totals.length - 1];
+  const delta = last - first;
+  const deltaSign = delta > 0 ? '+' : '';
+  const trendClass = delta > 0.5 ? 'up' : delta < -0.5 ? 'down' : 'flat';
+  const trendLabel = delta > 0.5 ? '上升趋势 ↑' : delta < -0.5 ? '下降趋势 ↓' : '基本持平 →';
+
+  document.getElementById('tab-history').innerHTML = `
+    <div class="card chart-card">
+      <div class="chart-card-header">
+        <div class="card-title">综合评分历史趋势</div>
+        <span class="chart-badge">${trendLabel}</span>
+      </div>
+      <div class="chart-wrap"><canvas id="hist-canvas"></canvas></div>
+      <div class="chart-footer">
+        <div class="chart-stat">
+          <span class="chart-stat-label">最新得分</span>
+          <span class="chart-stat-value">${last.toFixed(1)}</span>
+        </div>
+        <div class="chart-stat">
+          <span class="chart-stat-label">区间变化</span>
+          <span class="chart-stat-value ${trendClass}">${deltaSign}${delta.toFixed(1)}</span>
+        </div>
+        <div class="chart-stat">
+          <span class="chart-stat-label">最高分</span>
+          <span class="chart-stat-value">${Math.max(...totals).toFixed(1)}</span>
+        </div>
+        <div class="chart-stat">
+          <span class="chart-stat-label">最低分</span>
+          <span class="chart-stat-value">${Math.min(...totals).toFixed(1)}</span>
+        </div>
+      </div>
+    </div>
+    <div class="card chart-card">
+      <div class="chart-card-header">
+        <div class="card-title">各维度得分趋势</div>
+        <span class="chart-badge">6 个维度</span>
+      </div>
+      <div class="chart-wrap chart-wrap-sm"><canvas id="hist-dim-canvas"></canvas></div>
+    </div>`;
+
+  const r1 = yRange(totals);
   const ctx1 = document.getElementById('hist-canvas').getContext('2d');
   new Chart(ctx1, {
     type: 'line',
@@ -1264,30 +1324,53 @@ function renderHistory(data) {
       labels: years,
       datasets: [{
         label: '综合得分', data: totals,
-        borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.1)',
-        borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: '#16a34a',
-        fill: true, tension: .3,
+        borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.08)',
+        borderWidth: 3, pointRadius: 6, pointHoverRadius: 8,
+        pointBackgroundColor: '#fff', pointBorderColor: '#16a34a', pointBorderWidth: 2.5,
+        fill: true, tension: 0,
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { left: 80, right: 80 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+          padding: 12, cornerRadius: 8,
+          callbacks: { label: ctx => ` 综合得分：${ctx.parsed.y.toFixed(1)} 分` }
+        },
+        datalabels: { display: false },
+      },
       scales: {
-        y: { min: 0, max: 100, grid: { color: '#f3f4f6' }, ticks: { font: { size: 12 } } },
-        x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+        y: {
+          min: r1.min, max: r1.max,
+          grid: { color: '#f1f5f9' },
+          border: { dash: [4, 4] },
+          ticks: { font: { size: 12 }, color: '#64748b', callback: v => v + ' 分' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 13, weight: '500' }, color: '#374151' }
+        },
       }
     }
   });
 
   const dimNames  = data[0].dimensions.map(d => d.name);
   const dimColors = ['#16a34a','#0ea5e9','#f59e0b','#8b5cf6','#ec4899','#14b8a6'];
-
   const dimDatasets = dimNames.map((name, i) => ({
     label: name,
     data: data.map(yr => yr.dimensions[i]?.score ?? 0),
-    borderColor: dimColors[i], backgroundColor: dimColors[i] + '20',
-    borderWidth: 2, pointRadius: 4, tension: .3,
+    borderColor: dimColors[i], backgroundColor: dimColors[i] + '18',
+    borderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7,
+    pointBackgroundColor: '#fff', pointBorderColor: dimColors[i], pointBorderWidth: 2,
+    tension: 0,
   }));
+
+  // 所有维度分数合并计算 y 轴范围
+  const allDimVals = dimDatasets.flatMap(ds => ds.data);
+  const r2 = yRange(allDimVals);
 
   const ctx2 = document.getElementById('hist-dim-canvas').getContext('2d');
   new Chart(ctx2, {
@@ -1295,10 +1378,28 @@ function renderHistory(data) {
     data: { labels: years, datasets: dimDatasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } } },
+      layout: { padding: { left: 80, right: 80 } },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 12 }, boxWidth: 14, padding: 16, color: '#374151' }
+        },
+        tooltip: {
+          backgroundColor: '#1e293b', titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+          padding: 12, cornerRadius: 8,
+        },
+      },
       scales: {
-        y: { min: 0, grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
-        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: {
+          min: r2.min, max: r2.max,
+          grid: { color: '#f1f5f9' },
+          border: { dash: [4, 4] },
+          ticks: { font: { size: 11 }, color: '#64748b', callback: v => v + ' 分' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 12, weight: '500' }, color: '#374151' }
+        },
       }
     }
   });
