@@ -181,6 +181,14 @@
       padding: 24px;
     }
 
+    .score-ring-wrap { position: relative; width: 180px; height: 180px; }
+
+    .score-ring-wrap svg { width: 100%; height: 100%; }
+
+    .score-ring-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
 
     .score-num { font-size: 42px; font-weight: 800; color: var(--text); line-height: 1; }
     .score-denom { font-size: 14px; color: var(--text-muted); }
@@ -1097,8 +1105,22 @@ function renderOverview(d) {
     <div id="overview-top">
 
       <div class="card score-ring-card">
-        <div class="score-num" style="color:${scoreColor}">${d.total_score}</div>
-        <div class="score-denom">/ 100</div>
+        <div class="score-ring-wrap">
+          <svg viewBox="0 0 170 170">
+            <circle cx="85" cy="85" r="75" fill="none" stroke="#f3f4f6" stroke-width="14"/>
+            <circle cx="85" cy="85" r="75" fill="none"
+              stroke="${scoreColor}" stroke-width="14"
+              stroke-dasharray="${(arc*75/75).toFixed(2)} ${CIRCUMFERENCE.toFixed(2)}"
+              stroke-linecap="round"
+              transform="rotate(-90 85 85)"
+              style="transition: stroke-dasharray .7s cubic-bezier(.4,0,.2,1)"
+            />
+          </svg>
+          <div class="score-ring-center">
+            <div class="score-num" style="color:${scoreColor}">${d.total_score}</div>
+            <div class="score-denom">/ 100</div>
+          </div>
+        </div>
         <div class="rank-badge">
           <span class="rank-label">行业</span>
           ${rankLabel}
@@ -1117,13 +1139,13 @@ function renderOverview(d) {
 
     <div id="gap-trigger-row">
       <button id="gap-generate-btn" onclick="generateGapAnalysis()">
-        📊 生成合规差距分析
+        生成合规差距分析
       </button>
     </div>
 
     <div id="gap-panel" class="gap-panel" style="display:none">
       <div class="gap-panel-header">
-        <span class="gap-panel-title">📋 合规差距分析报告 · ${d.company_name} · ${d.report_year} 年</span>
+        <span class="gap-panel-title">合规差距分析报告 · ${d.company_name} · ${d.report_year} 年</span>
         <button class="gap-panel-close" onclick="closeGapPanel()" title="关闭">×</button>
       </div>
       <div class="gap-content" id="gap-content"></div>
@@ -2245,7 +2267,7 @@ async function generateGapAnalysis() {
     content.innerHTML = `<div style="color:#e53935">请求失败：${err.message}</div>`;
     gapIsStreaming = false;
     btn.disabled = false;
-    btn.textContent = '📊 重新生成分析';
+    btn.textContent = '重新生成分析';
   }
 }
 
@@ -2263,11 +2285,11 @@ function handleGapSSE(payload, content, btn) {
   } else if (payload.type === 'error') {
     content.innerHTML += `<div style="color:#e53935">错误：${text}</div>`;
     gapIsStreaming = false;
-    if (btn) { btn.disabled = false; btn.textContent = '📊 重新生成分析'; }
+    if (btn) { btn.disabled = false; btn.textContent = '重新生成分析'; }
   } else if (payload.type === 'done') {
     if (gapCurContent) content.innerHTML = marked.parse(gapCurContent);
     gapIsStreaming = false;
-    if (btn) { btn.disabled = false; btn.textContent = '📊 重新生成分析'; }
+    if (btn) { btn.disabled = false; btn.textContent = '重新生成分析'; }
   }
 }
 
