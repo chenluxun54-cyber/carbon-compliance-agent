@@ -34,6 +34,7 @@ from test_logger import logger as _test_logger
 from data_loader import DataLoader
 from scorer import CarbonScorer
 from policies import POLICIES
+from ef_database import execute_search_emission_factors as _exec_ef_search
 from calculator import (
     calc_scope2, calc_upstream_materials, calc_scope1_fuel,
     calc_transport, calc_packaging, calc_end_of_life, summarize_footprint,
@@ -206,6 +207,7 @@ SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询�
 2. 使用 carbon_score 工具查询数据库中企业的碳表现评分
 3. 使用 search_policies 工具搜索全球碳政策库
 4. 使用 get_policy_detail 工具获取政策详情和企业合规案例
+5. 使用 search_emission_factors 工具查询权威碳排放因子数据库（China_LCA/IPCC/UK_DEFRA）
         5. 使用 start_product_calc 工具启动产品碳足迹计算，帮助用户计算单个产品的碳排放量
         【start_product_calc 工具使用时机】
         - 用户想计算某个产品的碳排放/碳足迹时，立即调用此工具
@@ -225,6 +227,12 @@ SYSTEM_PROMPT = """你是一位专业的双碳（碳达峰、碳中和）咨询�
 - 用户询问某具体政策的详细内容时，必须调用此工具获取完整信息
 - 解释任何政策时，务必引用工具返回的真实企业合规案例，用具体行动和数据让说明生动易懂
 - 若已知当前企业所在行业，主动推荐最相关政策
+
+【search_emission_factors 工具使用时机】
+- 用户询问某产品、材料或燃料的碳排放因子时调用
+- 用户询问某运输方式的碳排放时调用
+- 需要引用权威排放因子数据源时调用（回复中必须注明数据来源和年份）
+- 返回结果中 factor=上游/生产排放，downstream_factor=使用阶段排放（China_LCA特有）
 
 回答要求：
 - 全程使用专业简洁的中文
@@ -316,6 +324,39 @@ TOOLS = [
                 }
             },
             "required": ["policy_id"]
+        }
+    },
+    {
+        "name": "search_emission_factors",
+        "description": (
+            "在碳排放因子数据库中搜索排放因子数值。"
+            "数据库覆盖三大权威来源：China_LCA（中国产品全生命周期，2022）、"
+            "IPCC（燃料燃烧CO2系数与GWP值）、UK_DEFRA（英国DEFRA 2021，Scope1/2/3）。"
+            "适用场景：用户询问某产品/材料/燃料/运输方式的碳排放因子；"
+            "需要核实排放因子数据来源；进行碳核算时需要权威排放因子。"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "搜索关键词，如：煤炭、天然气、钢铁、铁矿石、电力、甲烷、HFC-134a"
+                },
+                "category": {
+                    "type": "string",
+                    "description": (
+                        "一级分类过滤，可选值（China_LCA）：工业产品、能源产品、生活产品、"
+                        "废弃物处理、交通服务、碳汇；"
+                        "（IPCC）：燃料燃烧-固定源、燃料燃烧-移动源、温室气体GWP值、外购电力与蒸汽；"
+                        "（UK_DEFRA）：Scope1-燃料、Scope1-乘用车、Scope2-英国电力、"
+                        "Scope3-商务航空、Scope3-货物运输"
+                    )
+                },
+                "source": {
+                    "type": "string",
+                    "description": "数据源过滤，可选：China_LCA、IPCC、UK_DEFRA"
+                }
+            }
         }
     },
     _ASK_CLIENT_TOOL,
@@ -735,6 +776,12 @@ def execute_tool(tool_name: str, inputs: dict) -> str:
         )
     elif tool_name == "get_policy_detail":
         return execute_get_policy_detail(inputs["policy_id"])
+    elif tool_name == "search_emission_factors":
+        return _exec_ef_search(
+            keyword=inputs.get("keyword"),
+            category=inputs.get("category"),
+            source=inputs.get("source"),
+        )
     elif tool_name == "record_data":
         sid = _active_calc_session.get("current", "")
         return execute_record_data(sid, inputs)
@@ -1190,6 +1237,15 @@ async def get_policy(policy_id: str):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None, lambda: execute_get_policy_detail(policy_id)
+    )
+    return json.loads(result)
+
+
+@app.get("/emission-factors")
+async def get_emission_factors(keyword: str = None, category: str = None, source: str = None):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: _exec_ef_search(keyword=keyword, category=category, source=source)
     )
     return json.loads(result)
 
