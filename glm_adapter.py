@@ -182,9 +182,11 @@ class _GLMStream:
             if delta.tool_calls:
                 for tc in delta.tool_calls:
                     idx = tc.index
+                    fn = tc.function
                     if idx not in partials:
-                        name = (tc.function.name or "") if tc.function else ""
-                        partials[idx] = {"id": tc.id or "", "name": name, "arguments": ""}
+                        name = (fn.name or "") if fn else ""
+                        args = (fn.arguments or "") if fn else ""
+                        partials[idx] = {"id": tc.id or "", "name": name, "arguments": args}
                         yield _Event(
                             "content_block_start",
                             content_block=_ContentBlockHeader("tool_use", name=name),
@@ -192,11 +194,11 @@ class _GLMStream:
                     else:
                         if tc.id:
                             partials[idx]["id"] = tc.id
-                        if tc.function:
-                            if tc.function.name:
-                                partials[idx]["name"] = tc.function.name
-                            if tc.function.arguments:
-                                partials[idx]["arguments"] += tc.function.arguments
+                        if fn:
+                            if fn.name:
+                                partials[idx]["name"] = fn.name
+                            if fn.arguments:
+                                partials[idx]["arguments"] += fn.arguments
 
         blocks: list = []
         full_text = "".join(text_parts)
