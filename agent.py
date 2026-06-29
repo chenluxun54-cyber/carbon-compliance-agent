@@ -542,15 +542,19 @@ def _pre_extract_from_message(session_id: str, user_message: str) -> None:
     state = calc_data_state.get(session_id, {})
     extracted = {}
 
-    # Weight: "重50克" / "每个瓶子重50克"
+    # Weight: "重50克" / "每个瓶子重50克" / "100g" / "0.5千克"
     if not state.get("weight_kg"):
-        m = re.search(r'(?:重|每[件个只瓶杯箱])\s*(\d+(?:\.\d+)?)\s*克', user_message)
+        m = re.search(r'(\d+(?:\.\d+)?)\s*千克', user_message)
         if m:
-            extracted["weight_kg"] = float(m.group(1)) / 1000
+            extracted["weight_kg"] = float(m.group(1))
         else:
-            m = re.search(r'(?:重|每[件个只瓶杯箱])\s*(\d+(?:\.\d+)?)\s*千克', user_message)
+            m = re.search(r'(?:重|每[件个只瓶杯箱])\s*(\d+(?:\.\d+)?)\s*克', user_message)
             if m:
-                extracted["weight_kg"] = float(m.group(1))
+                extracted["weight_kg"] = float(m.group(1)) / 1000
+            else:
+                m = re.search(r'(\d+(?:\.\d+)?)\s*g\b', user_message, re.I)
+                if m:
+                    extracted["weight_kg"] = float(m.group(1)) / 1000
 
     # Region: any Chinese province name followed by 工厂/厂/地
     if not state.get("region"):
@@ -856,13 +860,25 @@ async def _run_calc_sub_agent(session_id: str, product_hint: str):
 
     _active_calc_session["current"] = session_id
 
-    # Pre-populate product_name from hint so multi-turn flows don't lose it.
-    # The LLM often omits product_name in subsequent record_data calls assuming
-    # it was already saved, which prevents auto-calc from reaching collected=5.
+    # Pre-populate product_name (and weight if parseable) from hint.
+    # The LLM often omits these in subsequent record_data calls, which blocks auto-calc.
     if product_hint:
         first_part = re.split(r'[，,、。\n]', product_hint.strip())[0].strip()
         if first_part:
-            execute_record_data(session_id, {"product_name": first_part[:50]})
+            hint_data: dict = {"product_name": first_part[:50]}
+            # Extract weight: "100g塑料瓶" / "100克水杯" / "0.5千克产品"
+            wm = re.search(r'(\d+(?:\.\d+)?)\s*千克', first_part)
+            if wm:
+                hint_data["weight_kg"] = float(wm.group(1))
+            else:
+                wm = re.search(r'(\d+(?:\.\d+)?)\s*克', first_part)
+                if wm:
+                    hint_data["weight_kg"] = float(wm.group(1)) / 1000
+                else:
+                    wm = re.search(r'(\d+(?:\.\d+)?)\s*g\b', first_part, re.I)
+                    if wm:
+                        hint_data["weight_kg"] = float(wm.group(1)) / 1000
+            execute_record_data(session_id, hint_data)
 
     messages = sessions[session_id]
     intro = product_hint if product_hint else "请开始帮我计算产品碳足迹。"

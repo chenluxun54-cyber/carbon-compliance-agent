@@ -157,14 +157,24 @@ class AgentRunner:
         kwargs = {}
         if self.tool_choice:
             kwargs["tool_choice"] = self.tool_choice
-        response = await self.client.messages.create(
-            model=self.model,
-            max_tokens=4096,
-            system=system_prompt,
-            tools=tools,
-            messages=messages,
-            **kwargs,
-        )
+        response = None
+        for attempt in range(2):
+            try:
+                response = await self.client.messages.create(
+                    model=self.model,
+                    max_tokens=4096,
+                    system=system_prompt,
+                    tools=tools,
+                    messages=messages,
+                    **kwargs,
+                )
+                break
+            except Exception as e:
+                # MiniMax occasionally returns 500 "unknown error, 999" — retry once
+                if attempt == 0 and "500" in str(e):
+                    await asyncio.sleep(3)
+                    continue
+                raise
         # Yield text tokens, stripping any TypeScript tool-call code blocks
         for block in response.content:
             if block.type == "text" and block.text:
