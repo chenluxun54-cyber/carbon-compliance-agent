@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 anthropic
+openai
 pandas
 openpyxl
 numpy

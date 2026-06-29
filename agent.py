@@ -4,6 +4,7 @@
 
 MODEL_PROVIDER=anthropic  → Claude (默认)
 MODEL_PROVIDER=minimax    → MiniMax（Anthropic-compatible endpoint）
+MODEL_PROVIDER=glm        → 智谱 GLM（OpenAI-compatible endpoint）
 """
 
 import json
@@ -67,14 +68,23 @@ PROVIDERS = {
         "base_url": "https://api.minimaxi.com/anthropic",
         "model": os.environ.get("MINIMAX_MODEL", "MiniMax-Text-01"),
     },
+    "glm": {
+        "api_key": os.environ.get("GLM_API_KEY", ""),
+        "base_url": "https://open.bigmodel.cn/api/paas/v4/",
+        "model": os.environ.get("GLM_MODEL", "glm-5.1"),
+    },
 }
 
 cfg = PROVIDERS[MODEL_PROVIDER]
 
-client = anthropic.AsyncAnthropic(
-    api_key=cfg["api_key"],
-    **({"base_url": cfg["base_url"]} if cfg["base_url"] else {}),
-)
+if MODEL_PROVIDER == "glm":
+    from glm_adapter import GLMClient
+    client = GLMClient(api_key=cfg["api_key"], base_url=cfg["base_url"])
+else:
+    client = anthropic.AsyncAnthropic(
+        api_key=cfg["api_key"],
+        **({"base_url": cfg["base_url"]} if cfg["base_url"] else {}),
+    )
 
 # ── 预初始化数据组件 ──────────────────────────────────────────────
 _loader = DataLoader()
@@ -985,7 +995,7 @@ _REPORT_REQUEST_KEYWORDS = ["报告", "下载", "report", "download", "html"]
 # ── Agent 主循环（SSE 流式生成器）───────────────────────────────
 async def agent_stream(session_id: str, user_message: str):
     if not cfg["api_key"]:
-        key_var = "ANTHROPIC_API_KEY" if MODEL_PROVIDER == "anthropic" else "MINIMAX_API_KEY"
+        key_var = {"anthropic": "ANTHROPIC_API_KEY", "minimax": "MINIMAX_API_KEY", "glm": "GLM_API_KEY"}.get(MODEL_PROVIDER, "API_KEY")
         yield f"data: {json.dumps({'type': 'error', 'content': f'未设置 {key_var} 环境变量。'})}\n\n"
         return
 
@@ -1374,7 +1384,7 @@ async def compliance_check(session_id: str):
 # ── Gap Analysis Stream ──────────────────────────────────────────
 async def gap_analysis_stream(score_data: dict):
     if not cfg["api_key"]:
-        key_var = "ANTHROPIC_API_KEY" if MODEL_PROVIDER == "anthropic" else "MINIMAX_API_KEY"
+        key_var = {"anthropic": "ANTHROPIC_API_KEY", "minimax": "MINIMAX_API_KEY", "glm": "GLM_API_KEY"}.get(MODEL_PROVIDER, "API_KEY")
         yield f"data: {json.dumps({'type': 'error', 'content': f'未设置 {key_var} 环境变量。'})}\n\n"
         return
 
