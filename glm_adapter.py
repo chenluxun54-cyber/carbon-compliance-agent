@@ -135,7 +135,7 @@ class _GLMStream:
         self._tools = tools
         self._messages = messages
         self._extra = extra_kwargs
-        self._final: _FinalMessage | None = None
+        self._final = None  # type: _FinalMessage
 
     async def __aenter__(self):
         return self
@@ -213,7 +213,7 @@ class _GLMStream:
         stop_reason = "tool_use" if partials else "end_turn"
         self._final = _FinalMessage(blocks, stop_reason)
 
-    async def get_final_message(self) -> _FinalMessage:
+    async def get_final_message(self):
         return self._final
 
 
@@ -227,7 +227,7 @@ class _GLMMessages:
     def stream(self, model, max_tokens, system, tools, messages, **kwargs) -> _GLMStream:
         return _GLMStream(self._oai, model, system, tools, messages, kwargs)
 
-    async def create(self, model, max_tokens, system, tools, messages, **kwargs) -> _FinalMessage:
+    async def create(self, model, max_tokens, system, tools, messages, **kwargs):
         oai_msgs = _ant_messages_to_openai(system, messages)
         oai_tools = _ant_tools_to_openai(tools)
 
