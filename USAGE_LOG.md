@@ -45,22 +45,12 @@
 ## ISSUE-20260622-003
 - severity: medium
 - category: response_quality
-- status: needs_review
+- status: fixed
 - file: agent.py
 - line: unknown
 - error: AI response lacks clarity and detail in the calculation process
 - trigger: "能给我生成报告吗"
-- steps_to_reproduce: |
-  1. Send: "能给我生成报告吗"
-  2. The AI response provides a list of collected information but does not detail how the carbon footprint is calculated or provide a final result.
-- evidence: |
-  ```
-  ai_response: |
-    请稍等片刻，报告正在生成中...
-    ...
-    所有必要的信息已经收集完毕，现在开始计算碳足迹。请稍等片刻。
-  ```
-- fix_hint: Enhance the AI response to include a detailed explanation of the calculation process and the final carbon footprint result. Ensure that the response is clear and informative.
+- fix_note: See duplicate entry below for full fix notes. Fixed by Bug 2/3 patches + direct-finalize path.
 - related_files: agent.py, scorer.py
 
 SUMMARY: 3 issues — The main problems are performance issues due to excessive elapsed time and redundant tool calls, as well as a lack of clarity and detail in the AI response regarding the carbon footprint calculation process.
@@ -108,23 +98,17 @@ processed_up_to: 2026-06-22T18:05:10.912101
 ## ISSUE-20260622-003
 - severity: medium
 - category: response_quality
-- status: needs_review
+- status: fixed
 - file: agent.py
 - line: unknown
 - error: AI response lacks detailed carbon footprint calculation results
 - trigger: "能给我生成报告吗"
-- steps_to_reproduce: |
-  1. Send: "能给我生成报告吗"
-  2. The agent collects information and states that it will calculate the carbon footprint but does not provide the actual calculation results.
-- evidence: |
-  ```
-  请稍等片刻，报告正在生成中...
-  ```
-  and
-  ```
-  所有必要的信息已经收集完毕，现在开始计算碳足迹。请稍等片刻。
-  ```
-- fix_hint: Ensure that the AI response includes the actual carbon footprint calculation results after the information collection and calculation steps. Modify the response to provide a detailed breakdown of the carbon footprint.
+- fix_note: |
+    Root cause was Bug 2 (start_product_calc infinite loop) + Bug 3 (MiniMax TS output hallucination)
+    causing the LLM to say "所有信息已收集，请稍等" without actually calling finalize_footprint.
+    Bug 2/3 are now fixed. Additionally added a direct-finalize path in agent_stream: when the user
+    is in calc mode and says a "报告/下载" keyword with all 5 required fields already collected,
+    _auto_finalize is called immediately without a LLM round-trip, eliminating the hung-state risk.
 - related_files: agent.py, scorer.py
 
 SUMMARY: 3 issues — The main problems are performance issues due to excessive time taken for report generation, redundant tool calls, and lack of detailed carbon footprint calculation results in the AI response.

@@ -995,6 +995,37 @@ async def agent_stream(session_id: str, user_message: str):
         _pre_extract_from_message(session_id, user_message)
         _active_calc_session["current"] = session_id
         try:
+            # If user asks for a report and all 5 required fields are already
+            # collected, skip the LLM round-trip and finalize immediately.
+            # This prevents MiniMax from saying "请稍等" without calling any tool.
+            if any(kw in user_message for kw in _REPORT_REQUEST_KEYWORDS):
+                _state = calc_data_state.get(session_id, {})
+                if (
+                    _state.get("product_name") and _state.get("weight_kg", 0) > 0
+                    and _state.get("region") and _state.get("electricity_kwh", 0) > 0
+                    and len(_state.get("materials", [])) > 0
+                    and session_id not in calc_results
+                ):
+                    rs = _auto_finalize(session_id, _state)
+                    if rs:
+                        summary = (
+                            f"✅ 计算完成！\n"
+                            f"**{rs.get('product_name', '产品')}** 每件碳足迹："
+                            f"**{rs.get('total_kgco2e', 0)} kg CO₂e**\n"
+                            f"相当于驾驶普通燃油车行驶 {rs.get('analogy_km', 0)} 公里的排放量"
+                            f"（按 0.22 kgCO₂e/km 测算）。\n"
+                            f"最大排放来源：{rs.get('hotspot', '未知')}，"
+                            f"占 {rs.get('hotspot_pct', 0)}%。\n"
+                            f"报告已生成，点击下方按钮即可下载。"
+                        )
+                        _test_logger.accumulate_token(summary)
+                        yield f"data: {json.dumps({'type': 'token', 'content': summary}, ensure_ascii=False)}\n\n"
+                        if session_id in calc_results:
+                            yield f"data: {json.dumps(_calc_complete_event(session_id), ensure_ascii=False)}\n\n"
+                        session_states.pop(session_id, None)
+                        calc_data_state.pop(session_id, None)
+                        return  # finally block below runs cleanup
+
             async for event in _calc_runner.run(messages, _effective_calc_prompt(), CALC_TOOLS):
                 if isinstance(event, dict) and event.get("type") == "token":
                     _test_logger.accumulate_token(event.get("content", ""))
