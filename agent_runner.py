@@ -113,6 +113,7 @@ class AgentRunner:
         max_iterations: int = 10,
         force_blocking: bool = False,
         tool_choice: dict = None,
+        max_tokens: int = 4096,
     ):
         self.client = client
         self.model = model
@@ -120,6 +121,7 @@ class AgentRunner:
         self.max_iterations = max_iterations
         self.force_blocking = force_blocking
         self.tool_choice = tool_choice
+        self.max_tokens = max_tokens
 
     async def _call_streaming(self, messages, system_prompt, tools):
         """First call: stream tokens as they arrive."""
@@ -128,7 +130,7 @@ class AgentRunner:
             kwargs["tool_choice"] = self.tool_choice
         async with self.client.messages.stream(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=self.max_tokens,
             system=system_prompt,
             tools=tools,
             messages=messages,
@@ -162,7 +164,7 @@ class AgentRunner:
             try:
                 response = await self.client.messages.create(
                     model=self.model,
-                    max_tokens=4096,
+                    max_tokens=self.max_tokens,
                     system=system_prompt,
                     tools=tools,
                     messages=messages,

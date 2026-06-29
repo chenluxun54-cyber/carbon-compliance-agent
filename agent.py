@@ -395,9 +395,8 @@ GAP_ANALYSIS_SYSTEM_PROMPT = """你是一位资深双碳合规顾问，专门为
 
 你的任务：
 1. 识别最薄弱的 2~3 个维度（percentage 最低）
-2. 针对薄弱维度，调用 search_policies 找到最相关的政策（传入 industry 参数）
-3. 对关键政策调用 get_policy_detail 获取具体合规要求，供路线图参考
-4. 输出一份结构清晰的中文 Markdown 分析报告，包含以下四个部分：
+2. 从用户消息中已提供的政策列表里，挑选最相关的 2~3 条政策（无需调用任何工具）
+3. 输出一份结构清晰的中文 Markdown 分析报告，包含以下四个部分：
 
 ---
 
@@ -426,7 +425,7 @@ GAP_ANALYSIS_SYSTEM_PROMPT = """你是一位资深双碳合规顾问，专门为
 - 全程使用中文
 - 数据引用必须来自输入的 JSON，不要编造百分位或分数
 - 路线图措施必须具体可操作，避免空洞建议
-- 篇幅控制在 600~900 字之间
+- 篇幅控制在 400~550 字之间，言简意赅
 """
 
 # ── Sub-agent: 产品碳足迹计算 ────────────────────────────────────
@@ -845,6 +844,7 @@ def _execute_tool_logged(tool_name: str, inputs: dict) -> str:
 # ── AgentRunner 单例（依赖 execute_tool，须在其后定义）──────────
 _runner = AgentRunner(client=client, model=cfg["model"], execute_tool=_execute_tool_logged)
 _calc_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=_execute_tool_logged, max_iterations=20, force_blocking=True)
+_gap_runner = AgentRunner(client=client, model=cfg["model"], execute_tool=_execute_tool_logged, max_tokens=1500)
 
 
 def _calc_complete_event(session_id: str) -> dict:
@@ -1388,14 +1388,25 @@ async def gap_analysis_stream(score_data: dict):
         yield f"data: {json.dumps({'type': 'error', 'content': f'未设置 {key_var} 环境变量。'})}\n\n"
         return
 
+    # Pre-fetch policies server-side so LLM can skip tool calls and write directly
+    loop = asyncio.get_event_loop()
+    industry = score_data.get("industry", "")
+    policies_json = await loop.run_in_executor(
+        None, lambda: execute_search_policies(industry=industry)
+    )
+
     user_msg = (
         f"请对以下企业的碳评分数据进行合规差距分析，并生成改进路线图。\n\n"
-        f"```json\n{json.dumps(score_data, ensure_ascii=False, indent=2)}\n```"
+        f"## 企业碳评分数据\n"
+        f"```json\n{json.dumps(score_data, ensure_ascii=False, indent=2)}\n```\n\n"
+        f"## 已检索到的相关政策（直接使用，无需再调用工具）\n"
+        f"```json\n{policies_json}\n```"
     )
     messages = [{"role": "user", "content": user_msg}]
 
     try:
-        async for event in _runner.run(messages, GAP_ANALYSIS_SYSTEM_PROMPT, TOOLS):
+        # Pass empty tools list — no tool calls needed, data is already in the prompt
+        async for event in _gap_runner.run(messages, GAP_ANALYSIS_SYSTEM_PROMPT, []):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
     except Exception as e:
         err_msg = str(e)

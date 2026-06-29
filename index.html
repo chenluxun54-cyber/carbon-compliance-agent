@@ -251,6 +251,14 @@
     .gap-content ul, .gap-content ol { padding-left: 20px; margin: 4px 0 10px; }
     .gap-content li { margin-bottom: 3px; }
     .gap-status-line { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-3); padding: 6px 0; }
+    /* ── Gap progress bar ── */
+    #gap-progress { padding: 10px 18px 2px; border-bottom: 1px solid #C3E8EA; }
+    .gap-progress-stages { display: flex; justify-content: space-between; margin-bottom: 7px; }
+    .gap-progress-stage { font-size: 11.5px; color: var(--ink-3); opacity: .4; transition: opacity .3s, color .3s; }
+    .gap-progress-stage.active { opacity: 1; color: var(--teal-dark); font-weight: 600; }
+    .gap-progress-stage.done { opacity: .7; color: var(--teal-dark); }
+    .gap-progress-track { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 2px; }
+    .gap-progress-fill { height: 100%; background: var(--teal); border-radius: 2px; transition: width .5s ease; width: 0%; }
 
     /* ── Tab 2: 维度详情 ───────────────────────────────── */
     .accordion-item {
@@ -532,9 +540,7 @@
       <button class="tab-btn" data-tab="policy" onclick="switchTab('policy')">政策库</button>
     </div>
 
-    <div id="sidebar-footer">
-      <div class="status-dot"></div> claude-sonnet-4-6
-    </div>
+    <div id="sidebar-footer" style="display:none"></div>
   </div>
 
   <!-- Main content -->
@@ -908,6 +914,14 @@ function renderOverview(d) {
       <div class="gap-panel-header">
         <span class="gap-panel-title">合规差距分析报告 · ${d.company_name} · ${d.report_year} 年</span>
         <button class="gap-panel-close" onclick="closeGapPanel()" title="关闭">×</button>
+      </div>
+      <div id="gap-progress" style="display:none">
+        <div class="gap-progress-stages">
+          <span class="gap-progress-stage active" id="gps-1">📊 分析数据</span>
+          <span class="gap-progress-stage" id="gps-2">🔍 搜索政策</span>
+          <span class="gap-progress-stage" id="gps-3">✍️ 生成报告</span>
+        </div>
+        <div class="gap-progress-track"><div class="gap-progress-fill" id="gap-progress-fill"></div></div>
       </div>
       <div class="gap-content" id="gap-content"></div>
     </div>
@@ -1993,9 +2007,19 @@ async function generateGapAnalysis() {
   gapIsStreaming = true;
   gapCurContent  = '';
   panel.style.display = 'block';
-  content.innerHTML   = '<div class="gap-status-line">⏳ 正在分析合规差距，请稍候…</div>';
+  content.innerHTML   = '';
   btn.disabled = true;
-  btn.textContent = '⏳ 分析中…';
+  btn.textContent = '⚡ 分析中…';
+  // show progress bar
+  const progressEl = document.getElementById('gap-progress');
+  if (progressEl) {
+    progressEl.style.display = 'block';
+    ['gps-1','gps-2','gps-3'].forEach((id,i) => {
+      const s = document.getElementById(id);
+      s.className = 'gap-progress-stage' + (i === 0 ? ' active' : '');
+    });
+    document.getElementById('gap-progress-fill').style.width = '8%';
+  }
 
   try {
     const resp = await fetch('/gap_analysis', {
@@ -2034,23 +2058,42 @@ async function generateGapAnalysis() {
   }
 }
 
+function _gapSetStage(stage) {
+  // stage: 1 = 分析数据, 2 = 搜索政策, 3 = 生成报告
+  const pcts = [8, 45, 80, 100];
+  const fill = document.getElementById('gap-progress-fill');
+  if (fill) fill.style.width = pcts[stage] + '%';
+  ['gps-1','gps-2','gps-3'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (i + 1 < stage) el.className = 'gap-progress-stage done';
+    else if (i + 1 === stage) el.className = 'gap-progress-stage active';
+    else el.className = 'gap-progress-stage';
+  });
+}
+
 function handleGapSSE(payload, content, btn) {
   const text = payload.content ?? payload.text ?? '';
   if (payload.type === 'token') {
+    if (!gapCurContent) _gapSetStage(3);  // first token → stage 3
     gapCurContent += text;
     content.innerHTML = marked.parse(gapCurContent);
     content.scrollTop = content.scrollHeight;
   } else if (payload.type === 'status') {
-    const statusLine = document.createElement('div');
-    statusLine.className = 'gap-status-line';
-    statusLine.textContent = '🔍 ' + text;
-    content.appendChild(statusLine);
+    _gapSetStage(2);  // any tool status → stage 2
   } else if (payload.type === 'error') {
     content.innerHTML += `<div style="color:#e53935">错误：${text}</div>`;
     gapIsStreaming = false;
+    const progressEl = document.getElementById('gap-progress');
+    if (progressEl) progressEl.style.display = 'none';
     if (btn) { btn.disabled = false; btn.textContent = '重新生成分析'; }
   } else if (payload.type === 'done') {
     if (gapCurContent) content.innerHTML = marked.parse(gapCurContent);
+    _gapSetStage(4);  // fill to 100%
+    setTimeout(() => {
+      const progressEl = document.getElementById('gap-progress');
+      if (progressEl) progressEl.style.display = 'none';
+    }, 800);
     gapIsStreaming = false;
     if (btn) { btn.disabled = false; btn.textContent = '重新生成分析'; }
   }
