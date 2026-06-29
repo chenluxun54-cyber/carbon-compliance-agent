@@ -64,6 +64,7 @@ def _sanitize_messages(messages: list) -> list:
     Remove orphaned tool_result entries that have no matching tool_use block
     in the preceding assistant message.  This can happen when ts_fallback IDs
     were written into session history by an older version of the code.
+    Handles both pure tool_result messages and mixed-content messages.
     Mutates the list in-place and returns it.
     """
     # Build a set of all tool_use IDs that appear in assistant messages
@@ -76,20 +77,23 @@ def _sanitize_messages(messages: list) -> list:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
                         valid_ids.add(block["id"])
 
-    # Drop user messages that are purely orphaned tool_results
+    # Strip orphaned tool_result blocks from any user message (pure or mixed)
     i = 0
     while i < len(messages):
         msg = messages[i]
         if msg.get("role") == "user":
             content = msg.get("content", [])
-            if isinstance(content, list) and all(
+            if isinstance(content, list) and any(
                 isinstance(b, dict) and b.get("type") == "tool_result"
                 for b in content
             ):
-                # Keep only tool_results whose id is in valid_ids
                 cleaned = [
                     b for b in content
-                    if b.get("tool_use_id") in valid_ids
+                    if not (
+                        isinstance(b, dict)
+                        and b.get("type") == "tool_result"
+                        and b.get("tool_use_id") not in valid_ids
+                    )
                 ]
                 if not cleaned:
                     messages.pop(i)

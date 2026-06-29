@@ -2640,39 +2640,23 @@ processed_up_to: 2026-06-23T15:57:11.125040
 ## ISSUE-20260624-120
 - severity: high
 - category: response_quality
-- status: needs_review
+- status: fixed
 - file: agent.py
 - line: 986
 - error: Empty or error response to a simple greeting
 - trigger: "hi"
-- steps_to_reproduce: |
-  1. Send: "hi"
-  2. The agent fails to respond and returns an empty or error message.
-- evidence: |
-  ```
-  ai_response: |
-    (empty or error)
-  ```
-- fix_hint: Implement a fallback mechanism in the agent to handle unexpected errors gracefully. Ensure that the agent responds with a user-friendly message when it encounters issues processing a request.
+- fix_note: Symptom of ISSUE-119 (ts_fallback BadRequestError). Fixed by _sanitize_messages in agent_runner.py removing orphaned tool_result blocks before each API call. Verified clean in testing_log 2026-06-26.
 - related_files: agent.py, agent_runner.py
 
 ## ISSUE-20260624-121
 - severity: medium
 - category: performance
-- status: needs_review
+- status: fixed
 - file: agent_runner.py
 - line: 141
 - error: Slow response time (>10s) due to error handling
 - trigger: "hi"
-- steps_to_reproduce: |
-  1. Send: "hi"
-  2. The agent takes longer than 10 seconds to respond due to error handling and attempting to process the message.
-- evidence: |
-  ```
-  total_elapsed: 1.97s
-  ```
-  (Note: Although the elapsed time is less than 10s, the error handling process may indicate a potential for slow responses in other cases.)
-- fix_hint: Optimize the error handling process to minimize the time taken to respond to user messages. Consider implementing timeouts and more efficient error checking mechanisms.
+- fix_note: Symptom of ISSUE-119. The 1.97s delay was the error handling path triggered by the ts_fallback 400 error. No longer occurs since ISSUE-119 was fixed.
 - related_files: agent_runner.py, agent.py
 
 SUMMARY: 3 issues — The main problems are related to API errors due to invalid tool IDs, empty or error responses to user messages, and potential performance issues with error handling.
