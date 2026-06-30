@@ -124,15 +124,27 @@ def _read_recent_trace(window_seconds: int = TRACE_WINDOW_SECONDS) -> list[dict]
 
 
 def _load_existing_bugs() -> list[dict]:
-    """解析bugs.md,返回 [{id, state, action}, ...] 供去重判断用,只取最近的几条"""
+    """解析bugs.md,返回未修复的 [{id, state, action}, ...] 供去重判断用。
+    已标记 '修复状态: fixed' 的条目不参与去重——若同一问题再次出现应开新条目。"""
     if not BUGS_FILE.exists():
         return []
     text = BUGS_FILE.read_text(encoding="utf-8")
-    sections = re.findall(r"## Bug #(\d+)\n- 状态: (.*)\n- 动作: (.*)", text)
-    return [
-        {"id": bug_id, "state": state, "action": action}
-        for bug_id, state, action in sections[-MAX_EXISTING_BUGS_FOR_DEDUP:]
-    ]
+    # 每个 Bug 块以 "## Bug #NNN" 开头，到下一个 ## 或文件末尾结束
+    blocks = re.split(r"(?=## Bug #\d+)", text)
+    results = []
+    for block in blocks:
+        id_m = re.search(r"## Bug #(\d+)", block)
+        if not id_m:
+            continue
+        bug_id = id_m.group(1)
+        # 跳过已修复条目
+        if re.search(r"^- 修复状态: fixed", block, re.MULTILINE):
+            continue
+        state_m  = re.search(r"^- 状态: (.*)", block, re.MULTILINE)
+        action_m = re.search(r"^- 动作: (.*)", block, re.MULTILINE)
+        if state_m and action_m:
+            results.append({"id": bug_id, "state": state_m.group(1), "action": action_m.group(1)})
+    return results[-MAX_EXISTING_BUGS_FOR_DEDUP:]
 
 
 def _next_bug_id() -> str:
@@ -173,7 +185,8 @@ async def _append_new_bug(entry: dict) -> None:
         f"- 实际: {entry.get('actual', '')}\n"
         f"- 原话: \"{entry.get('original_quote', '')}\"\n"
         f"- 首次记录: {datetime.now(timezone.utc).isoformat()}\n"
-        f"- 复现次数: 1\n\n"
+        f"- 复现次数: 1\n"
+        f"- 修复状态: open\n\n"
     )
     with BUGS_FILE.open("a", encoding="utf-8") as f:
         f.write(block)
