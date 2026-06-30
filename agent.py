@@ -22,10 +22,11 @@ log = logging.getLogger(__name__)
 
 import anthropic
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from agent_runner import AgentRunner
+from trace_endpoint import trace_router
 
 # ── 确保从 carbon_skill 目录运行（让 DataLoader 能找到 xlsx 文件）──
 os.chdir(Path(__file__).parent)
@@ -1141,6 +1142,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(trace_router)
+
 
 async def _with_keepalive(gen, interval: int = 8):
     """
@@ -1436,6 +1439,11 @@ async def gap_analysis_endpoint(request: Request):
 async def agent_docs():
     md_path = Path(__file__).parent / "agent.md"
     return {"content": md_path.read_text(encoding="utf-8")}
+
+
+@app.get("/trace-capture.js")
+async def serve_trace_js():
+    return FileResponse(Path(__file__).parent / "trace-capture.js", media_type="application/javascript")
 
 
 @app.get("/", response_class=HTMLResponse)
