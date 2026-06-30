@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agent_runner import AgentRunner
 from trace_endpoint import trace_router
+from detector import evaluate_and_log
 
 # ── 确保从 carbon_skill 目录运行（让 DataLoader 能找到 xlsx 文件）──
 os.chdir(Path(__file__).parent)
@@ -1017,6 +1018,8 @@ async def agent_stream(session_id: str, user_message: str):
     # Route to calc sub-agent if session is in calc mode
     if session_states.get(session_id) == "calc":
         messages.append({"role": "user", "content": user_message})
+        _ctx = [{"role": m["role"], "content": m["content"]} for m in messages[-8:] if isinstance(m.get("content"), str)]
+        asyncio.create_task(evaluate_and_log(user_message=user_message, recent_messages=_ctx))
         # Pre-extract data fields so calc state is populated even when MiniMax
         # outputs acknowledgment text instead of calling record_data via tool API.
         _pre_extract_from_message(session_id, user_message)
@@ -1078,6 +1081,8 @@ async def agent_stream(session_id: str, user_message: str):
         return
 
     messages.append({"role": "user", "content": user_message})
+    _ctx = [{"role": m["role"], "content": m["content"]} for m in messages[-8:] if isinstance(m.get("content"), str)]
+    asyncio.create_task(evaluate_and_log(user_message=user_message, recent_messages=_ctx))
 
     memory_ctx = _build_memory_context(session_id, user_message)
     learned_rules = _read_learned_rules()
