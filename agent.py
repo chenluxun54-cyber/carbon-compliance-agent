@@ -522,8 +522,12 @@ sessions: dict[str, list] = {}
 session_states: dict[str, str] = {}  # session_id → "main" | "calc"
 # Signals from execute_tool to agent_stream that sub-agent should start
 _sub_agent_pending: dict[str, dict] = {}
-# Stores the last finalize_footprint result per session (for report download)
+# Latest result per session (for compliance-check endpoint)
 calc_results: dict[str, dict] = {}
+# All historical results keyed by calc_id (e.g. "ses_abc__c1") — never overwritten
+all_calc_results: dict[str, dict] = {}
+# Per-session calculation counter for generating unique calc_ids
+calc_counters: dict[str, int] = {}
 # Active session_id being processed by the calc sub-agent (for result storage)
 _active_calc_session: dict[str, str] = {"current": ""}
 # Accumulated data state per calc session
@@ -723,6 +727,9 @@ def execute_get_policy_detail(policy_id: str) -> str:
     return json.dumps(policy, ensure_ascii=False, indent=2)
 
 
+_VALID_TRANSPORT_MODES = {"公路", "铁路", "海运", "航空"}
+
+
 def execute_finalize_footprint(inputs: dict) -> str:
     scope1 = calc_scope1_fuel(
         inputs.get("fuel_type", ""),
@@ -746,6 +753,27 @@ def execute_finalize_footprint(inputs: dict) -> str:
         disposal_method=inputs.get("end_of_life_method", ""),
         recycled_pct=float(inputs.get("end_of_life_recycled_pct", 0)),
     )
+
+    # Auto-build ISO 14067 §6 assumptions from defaults used during calculation
+    auto_assumptions = list(inputs.get("assumptions", []))
+    if materials.get("unknowns"):
+        auto_assumptions.append(
+            "以下原材料未找到对应排放因子，已跳过计算：" + "、".join(materials["unknowns"])
+        )
+    if packaging and packaging.get("unknowns"):
+        auto_assumptions.append(
+            "以下包装材料未找到对应排放因子，已跳过计算：" + "、".join(packaging["unknowns"])
+        )
+    if float(inputs.get("transport_distance_km", 0)) > 0:
+        mode = inputs.get("transport_mode", "")
+        if mode not in _VALID_TRANSPORT_MODES:
+            auto_assumptions.append("运输方式未指定或未知，已使用公路默认排放因子（0.0965 kgCO₂e/吨·km）")
+    if scope2.get("warning"):
+        auto_assumptions.append(
+            f"生产地区「{scope2.get('grid_region', '未知')}」无法匹配已知电网大区，"
+            "已使用全国平均排放因子（0.5568 kgCO₂e/kWh）"
+        )
+
     result = summarize_footprint(
         product_name=inputs["product_name"],
         functional_unit=inputs["functional_unit"],
@@ -755,12 +783,17 @@ def execute_finalize_footprint(inputs: dict) -> str:
         transport=transport,
         packaging=packaging,
         end_of_life=end_of_life,
-        assumptions=inputs.get("assumptions", []),
+        assumptions=auto_assumptions,
         certification_standard=inputs.get("certification_standard") or None,
     )
-    # Store full result for report download
+    # Store result: latest per session + permanent per calc_id
     sid = _active_calc_session.get("current", "")
     if sid:
+        n = calc_counters.get(sid, 0) + 1
+        calc_counters[sid] = n
+        calc_id = f"{sid}__c{n}"
+        result["_calc_id"] = calc_id
+        all_calc_results[calc_id] = result
         calc_results[sid] = result
 
     # Return a concise summary to the LLM — full detail is in calc_results
@@ -855,6 +888,7 @@ def _calc_complete_event(session_id: str) -> dict:
     return {
         "type":         "calc_complete",
         "session_id":   session_id,
+        "calc_id":      result.get("_calc_id", session_id),
         "product_name": result.get("product_name", ""),
         "total_kgco2e": result.get("total_kgco2e", 0),
         "analogy_km":   result.get("analogy_km", 0),
@@ -1361,15 +1395,17 @@ async def wipe_user_memory(user_id: str):
     return {"user_id": user_id, **result}
 
 
-@app.get("/footprint-report/{session_id}")
-async def footprint_report(session_id: str):
-    result = calc_results.get(session_id)
+@app.get("/footprint-report/{calc_id:path}")
+async def footprint_report(calc_id: str):
+    # calc_id may be a specific id (e.g. "ses_abc__c1") or a session_id (latest result)
+    result = all_calc_results.get(calc_id) or calc_results.get(calc_id)
     if not result:
         return {"error": "未找到计算结果，请先完成碳足迹计算"}
     html = generate_report_html(result)
+    safe_name = result.get("product_name", "report").replace(" ", "_")[:40]
     return HTMLResponse(
         content=html,
-        headers={"Content-Disposition": "attachment; filename=carbon_footprint_report.html"},
+        headers={"Content-Disposition": f"attachment; filename=carbon_footprint_{safe_name}.html"},
     )
 
 

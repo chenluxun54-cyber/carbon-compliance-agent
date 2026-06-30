@@ -14,8 +14,10 @@ class CarbonScorer:
 
     def _score_linear(self, col, rank, sample_size, is_inverse):
         max_score = self._MAX_SCORES[col]
-        if rank is None or not sample_size:
+        if rank is None:
             return 0.0, 0.0
+        if not sample_size:  # sample_size == 0: give full score (no peers to rank against)
+            return round(max_score, 1), 1.0
         percentile = rank / sample_size
         if is_inverse:
             percentile = 1 - percentile
@@ -37,6 +39,9 @@ class CarbonScorer:
         sample_size = data.get("sample_size")
         indicator_scores = {}
         flags = []
+
+        if sample_size is not None and sample_size <= 1:
+            flags.append(f"行业样本数量仅为 {sample_size}，线性指标得满分，评级结果参考价值有限")
 
         # 线性赋分
         for col, max_score, is_inverse in LINEAR_INDICATORS:

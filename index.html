@@ -1580,12 +1580,13 @@ function handleSSE(payload, showUser) {
     }
     case 'calc_complete': {
       const sid = payload.session_id;
+      const calcId = payload.calc_id || sid;
       // Hide progress tracker (keep previous product bubbles intact)
       const progPanel = document.getElementById('calc-progress');
       if (progPanel) progPanel.style.display = 'none';
 
-      // Single chat bubble: summary + download link + compliance badges inline
-      const compDivId = `comp-${sid}`;
+      // Append a persistent chat bubble for this calculation result
+      const compDivId = `comp-${calcId.replace(/[^a-zA-Z0-9]/g, '_')}`;
       const productName = payload.product_name || '产品';
       const total = payload.total_kgco2e || 0;
       const analogy = payload.analogy_km || 0;
@@ -1605,16 +1606,17 @@ function handleSSE(payload, showUser) {
 
       const dlBubble = document.createElement('div');
       dlBubble.className = 'msg-row assistant calc-report-bubble';
+      dlBubble.dataset.calcId = calcId;
       dlBubble.innerHTML = `<div class="msg-bubble">
         ${summaryHtml}
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-          <a href="/footprint-report/${sid}" target="_blank"
+          <a href="/footprint-report/${encodeURIComponent(calcId)}" target="_blank"
              style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;
                     background:#16a34a;color:#fff;border-radius:8px;
                     text-decoration:none;font-size:13px;font-weight:600">
             📊 查看完整报告（含PDF导出）
           </a>
-          <a href="/footprint-report/${sid}" download="carbon_footprint_report.html"
+          <a href="/footprint-report/${encodeURIComponent(calcId)}" download="carbon_footprint_${escHtml(productName)}.html"
              style="display:inline-flex;align-items:center;gap:6px;padding:10px 18px;
                     background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:8px;
                     text-decoration:none;font-size:13px;font-weight:600">
@@ -1628,7 +1630,7 @@ function handleSSE(payload, showUser) {
       document.getElementById('chat-messages').appendChild(dlBubble);
       chatScrollDown();
 
-      // Fetch compliance JSON and update the inline div
+      // Fetch compliance JSON and update the inline div (always uses latest session result)
       fetch(`/compliance-check/${sid}`)
         .then(r => r.json())
         .then(data => {
