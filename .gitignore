@@ -5,3 +5,5 @@ venv/
 .venv/
 ~$*.xlsx
 chat_history.db
+chroma_db/
+trace.jsonl
