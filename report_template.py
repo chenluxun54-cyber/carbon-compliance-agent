@@ -178,18 +178,38 @@ def generate_report_html(result: dict) -> str:
   .badge-green {{ background:#dcfce7; color:#14532d; }}
   .analogy {{ background:#f0fdf4; border-left:4px solid #16a34a; padding:12px 16px;
               border-radius:0 8px 8px 0; margin:16px 0; }}
-  .print-btn {{ display:block; width:160px; margin:0 0 16px auto;
-                background:#16a34a; color:#fff; border:none; border-radius:8px;
-                padding:10px 0; text-align:center; cursor:pointer; font-size:14px;
-                font-weight:600; }}
-  .print-btn:hover {{ background:#14532d; }}
+  .action-bar {{ display:flex; gap:10px; justify-content:flex-end; padding:16px 36px 0; flex-wrap:wrap; }}
+  .btn {{ display:inline-flex; align-items:center; gap:6px; padding:10px 18px;
+          border:none; border-radius:8px; cursor:pointer; font-size:13px;
+          font-weight:600; text-decoration:none; }}
+  .btn-pdf {{ background:#16a34a; color:#fff; }}
+  .btn-pdf:hover {{ background:#14532d; }}
+  .btn-print {{ background:#f3f4f6; color:#374151; border:1px solid #d1d5db; }}
+  .btn-print:hover {{ background:#e5e7eb; }}
   .footer {{ background:#f9fafb; padding:20px 36px; font-size:12px; color:#6b7280; }}
   @media print {{
     body {{ background:#fff; padding:0; }}
     .page {{ box-shadow:none; border-radius:0; }}
-    .print-btn {{ display:none; }}
+    .action-bar {{ display:none; }}
   }}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+function downloadPDF() {{
+  const bar = document.querySelector('.action-bar');
+  bar.style.display = 'none';
+  const filename = 'carbon_footprint_{product}_' + new Date().toISOString().slice(0,10) + '.pdf';
+  html2pdf().set({{
+    margin: [8, 6, 8, 6],
+    filename: filename,
+    image: {{ type: 'jpeg', quality: 0.97 }},
+    html2canvas: {{ scale: 2, useCORS: true, logging: false }},
+    jsPDF: {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
+  }}).from(document.querySelector('.page')).save().finally(() => {{
+    bar.style.display = '';
+  }});
+}}
+</script>
 </head>
 <body>
 <div class="page">
@@ -211,9 +231,10 @@ def generate_report_html(result: dict) -> str:
     <div class="unit">每件产品全生命周期碳排放量</div>
   </div>
 
-  <!-- Print button -->
-  <div style="padding:16px 36px 0">
-    <button class="print-btn" onclick="window.print()">🖨 打印 / 保存PDF</button>
+  <!-- Action bar -->
+  <div class="action-bar">
+    <button class="btn btn-pdf" onclick="downloadPDF()">📄 下载 PDF</button>
+    <button class="btn btn-print" onclick="window.print()">🖨 打印</button>
   </div>
 
   <!-- Section 1: Results summary -->

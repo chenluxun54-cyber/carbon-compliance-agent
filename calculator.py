@@ -16,15 +16,28 @@ _CAR_KG_PER_KM = 0.221
 
 def calc_scope2(electricity_kwh: float, region: str) -> dict:
     grid_key = resolve_region(region)
-    ef = GRID_FACTORS[grid_key]
-    value = electricity_kwh * ef
-    return {
-        "value_kgco2e": round(value, 4),
-        "electricity_kwh": electricity_kwh,
-        "grid_region": grid_key,
-        "ef_kgco2e_per_kwh": ef,
-        "source": EF_SOURCES["grid"],
-    }
+    ef = GRID_FACTORS.get(grid_key)
+    if ef is not None:
+        value = electricity_kwh * ef
+        return {
+            "value_kgco2e": round(value, 4),
+            "electricity_kwh": electricity_kwh,
+            "grid_region": grid_key,
+            "ef_kgco2e_per_kwh": ef,
+            "source": EF_SOURCES["grid"],
+        }
+    else:
+        # Perform partial calculation with a default emission factor if available
+        default_ef = GRID_FACTORS.get("default", 0.5)  # Example default value
+        value = electricity_kwh * default_ef
+        return {
+            "value_kgco2e": round(value, 4),
+            "electricity_kwh": electricity_kwh,
+            "grid_region": grid_key if grid_key else "未知",
+            "ef_kgco2e_per_kwh": default_ef,
+            "source": EF_SOURCES["grid"],
+            "warning": "使用默认电网排放因子进行估算，结果可能不准确。",
+        }
 
 
 def calc_upstream_materials(items: list) -> dict:
